@@ -1,0 +1,23 @@
+id = "ubi8-paketo"
+homepage = "https://github.com/paketo-community/ubi-base-stack"
+maintainer = "Red Hat"
+
+platforms = ["linux/amd64"]
+
+[build]
+  description = "base build ubi8 image to support buildpacks"
+  dockerfile = "./build.Dockerfile"
+  gid = 1000
+  shell = "/bin/bash"
+  uid = 1000
+
+  [build.args]
+
+[run]
+  description = "ubi8 nodejs-16 image to support buildpacks"
+  dockerfile = "./run.Dockerfile"
+  gid = 1000
+  shell = "/bin/bash"
+  uid = 1000
+
+  [run.args]
