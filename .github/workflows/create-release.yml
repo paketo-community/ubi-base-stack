@@ -1,0 +1,279 @@
+name: Create Release
+
+on:
+  push:
+    branches:
+    - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version of the release to cut (e.g. 1.2.3). No leading v'
+        required: false
+      force:
+        description: 'Release stack even if change validator does not detect changes, or a package is removed'
+        required: true
+        type: choice
+        default: 'false'
+        options:
+        - 'true'
+        - 'false'
+
+concurrency: release
+jobs:
+  stack_files_changed:
+    name: Determine If Stack Files Changed
+    runs-on: ubuntu-22.04
+    outputs:
+      stack_files_changed: ${{ steps.compare.outputs.stack_files_changed }}
+    steps:
+    - name: Checkout With History
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # gets full history
+
+    - name: Compare With Previous Release
+      id: compare
+      run: |
+        # shellcheck disable=SC2046
+        changed="$(git diff --name-only $(git describe --tags --abbrev=0) -- stack)"
+        if [ -z "${changed}" ]
+        then
+          echo "No relevant files changed since previous release."
+          echo "stack_files_changed=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "Relevant files have changed since previous release."
+          echo "${changed}"
+          echo "stack_files_changed=true" >> "$GITHUB_OUTPUT"
+        fi
+
+  run_if_stack_files_changed:
+    name: Run If Stack Files Changed
+    runs-on: ubuntu-22.04
+    needs: [stack_files_changed]
+    if: ${{ needs.stack_files_changed.outputs.stack_files_changed == 'true' }}
+    steps:
+    - name: Run if stack files changed
+      run: |
+        echo "stack files have changed"
+
+  create_stack:
+    name: Create Stack
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Create stack
+      id: create-stack
+      uses: paketo-buildpacks/github-config/actions/stack/create-stack@main
+
+    - name: Upload build image
+      uses: actions/upload-artifact@v3
+      with:
+        name: current-build-image
+        path: build/build.oci
+
+    - name: Upload base run image
+      uses: actions/upload-artifact@v3
+      with:
+        name: current-run-image
+        path: build/run.oci
+
+    - name: Upload nodejs-16 run image
+      uses: actions/upload-artifact@v3
+      with:
+        name: current-nodejs-16-run-image
+        path: build-nodejs-16/run.oci
+
+    - name: Upload nodejs-18 run image
+      uses: actions/upload-artifact@v3
+      with:
+        name: current-nodejs-18-run-image
+        path: build-nodejs-18/run.oci
+
+  test:
+    name: Acceptance Test
+    needs: [ create_stack ]
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Setup Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.20.x
+
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Create OCI artifacts destination directory
+      run: |
+        mkdir -p build
+
+    - name: Download Build Image
+      uses: actions/download-artifact@v3
+      with:
+        name: current-build-image
+        path: build
+
+    - name: Download Run Image
+      uses: actions/download-artifact@v3
+      with:
+        name: current-run-image
+        path: build
+
+    - name: Download nodejs-16 Run Image
+      uses: actions/download-artifact@v3
+      with:
+        name: current-nodejs-16-run-image
+        path: build/run-nodejs-16.oci
+
+    - name: Download nodejs-18 Run Image
+      uses: actions/download-artifact@v3
+      with:
+        name: current-nodejs-18-run-image
+        path: build/run-nodejs-18.oci
+
+    #- name: Run Acceptance Tests
+    #run: ./scripts/test.sh
+
+  force_release_creation:
+    name: Force Release Creation
+    runs-on: ubuntu-22.04
+    if: ${{github.event.inputs.force == 'true'}}
+    steps:
+    - name: Signal force release creation
+      run: |
+        echo "Force release creation input set to true"
+
+  release:
+    name: Release
+    runs-on: ubuntu-22.04
+    needs: [create_stack, run_if_stack_files_changed, test, force_release_creation ]
+    if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
+    steps:
+    - name: Print Release Reasoning
+      run: |
+        printf "Diff Packages: %s\n" "${{ needs.diff.result }}"
+        printf "Acceptance Tests: %s\n" "${{ needs.test.result }}"
+        printf "Run If Stack Files Changed: %s\n" "${{ needs.run_if_stack_files_changed.result }}"
+        printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
+
+    - name: Checkout With History
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # gets full history
+
+    - name: Download current build image
+      uses: actions/download-artifact@v3
+      with:
+        name: current-build-image
+
+    - name: Download current run image
+      uses: actions/download-artifact@v3
+      with:
+        name: current-run-image
+
+    - name: Download current nodejs-16 run image
+      uses: actions/download-artifact@v3
+      with:
+        name: current-nodejs-16-run-image
+        path: run-nodejs-16.oci
+
+    - name: Download current nodejs-18 run image
+      uses: actions/download-artifact@v3
+      with:
+        name: current-nodejs-18-run-image
+        path: run-nodejs-18.oci
+
+    - name: Increment Tag
+      if: github.event.inputs.version == ''
+      id: semver
+      uses: paketo-buildpacks/github-config/actions/tag/increment-tag@main
+      with:
+        allow_head_tagged: true
+
+    - name: Set Release Tag
+      id: tag
+      run: |
+        tag="${{ github.event.inputs.version }}"
+        if [ -z "${tag}" ]; then
+          tag="${{ steps.semver.outputs.tag }}"
+        fi
+        echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+    - name: Get Repository Name
+      id: repo_name
+      run: |
+        full=${{ github.repository }}
+        # Strip off the org and slash from repo name
+        # paketo-buildpacks/repo-name --> repo-name
+        repo=$(echo "${full}" | sed 's/^.*\///')
+        echo "github_repo_name=${repo}" >> "$GITHUB_OUTPUT"
+
+        # Strip off 'stack' suffix from repo name
+        # some-name-stack --> some-name
+        registry_repo="${repo//-stack/}"
+        echo "registry_repo_name=${registry_repo}" >> "$GITHUB_OUTPUT"
+
+
+    - name: Setup Release Assets
+      id: assets
+      run: |
+        assets="$(jq --null-input --compact-output \
+          --arg tag "${{ steps.tag.outputs.tag }}" \
+          --arg repo "${{ steps.repo_name.outputs.github_repo_name }}" \
+          '[
+            {
+              "path": "build.oci",
+              "name": ($repo + "-" + $tag + "-" + "build.oci"),
+              "content_type": "application/gzip"
+            },
+            {
+              "path": "run.oci",
+              "name": ($repo + "-" + $tag + "-" + "run.oci"),
+              "content_type": "application/gzip"
+            },
+            {
+              "path": "run-nodejs-16.oci",
+              "name": ($repo + "-" + $tag + "-" + "run-nodejs-16.oci"),
+              "content_type": "application/gzip"
+            },
+            {
+              "path": "run-nodejs-18.oci",
+              "name": ($repo + "-" + $tag + "-" + "run-nodejs-18.oci"),
+              "content_type": "application/gzip"
+            }]')"
+
+
+        printf "assets=%s\n" "${assets}" >> "$GITHUB_OUTPUT"
+
+    - name: Create Release
+      uses: paketo-buildpacks/github-config/actions/release/create@main
+      with:
+        repo: ${{ github.repository }}
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+        tag_name: v${{ steps.tag.outputs.tag }}
+        target_commitish: ${{ github.sha }}
+        name: v${{ steps.tag.outputs.tag }}
+        body: ${{ steps.notes.outputs.release_body }}
+        draft: false
+        assets: ${{ steps.assets.outputs.assets }}
+
+  failure:
+    name: Alert on Failure
+    runs-on: ubuntu-22.04
+    needs: [poll_usns, create_stack, diff, test, release, packages_changed, stack_files_changed]
+    if: ${{ always() && needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' || needs.stack_files_changed.result == 'failure' }}
+    steps:
+    - name: File Failure Alert Issue
+      uses: paketo-buildpacks/github-config/actions/issue/file@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        repo: ${{ github.repository }}
+        label: "failure:release"
+        comment_if_exists: true
+        issue_title: "Failure: Create Release workflow"
+        issue_body: |
+          Create Release workflow [failed](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}).
+          Please take a look to ensure CVE patches can be released. (cc @paketo-buildpacks/stacks-maintainers).
+        comment_body: |
+          Another failure occurred: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
