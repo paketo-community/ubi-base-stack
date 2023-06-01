@@ -1,4 +1,4 @@
-id = "ubi8-paketo"
+id = "io.buildpacks.stacks.ubi8"
 homepage = "https://github.com/paketo-community/ubi-base-stack"
 maintainer = "Red Hat"
 
