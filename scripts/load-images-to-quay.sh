@@ -1,9 +1,9 @@
 rm ../build/*.oci
 rm ../build-nodejs-16/*.oci
 rm ../build-nodejs-18/*.oci
-bash ./create.sh
-bash ./create-nodejs-16.sh
-bash ./create-nodejs-18.sh
+
+readonly PROG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bash $PROG_DIR/create.sh
 
 skopeo copy --dest-tls-verify=false oci-archive:../build/run.oci docker-daemon:quay.io/midawson/ubi8-paketo-run:latest
 skopeo copy --dest-tls-verify=false oci-archive:../build/run.oci docker-daemon:quay.io/midawson/ubi8-paketo-build:latest
