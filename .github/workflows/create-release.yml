@@ -124,13 +124,13 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: current-nodejs-16-run-image
-        path: build/run-nodejs-16.oci
+        path: build-nodejs-16
 
     - name: Download nodejs-18 Run Image
       uses: actions/download-artifact@v3
       with:
         name: current-nodejs-18-run-image
-        path: build/run-nodejs-18.oci
+        path: build-nodejs-18
 
     #- name: Run Acceptance Tests
     #run: ./scripts/test.sh
@@ -148,7 +148,7 @@ jobs:
     name: Release
     runs-on: ubuntu-22.04
     needs: [create_stack, run_if_stack_files_changed, test, force_release_creation ]
-    if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
+    if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' || ( needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
     steps:
     - name: Print Release Reasoning
       run: |
@@ -176,13 +176,13 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: current-nodejs-16-run-image
-        path: run-nodejs-16.oci
+        path: build-nodejs-16
 
     - name: Download current nodejs-18 run image
       uses: actions/download-artifact@v3
       with:
         name: current-nodejs-18-run-image
-        path: run-nodejs-18.oci
+        path: build-nodejs-18
 
     - name: Increment Tag
       if: github.event.inputs.version == ''
@@ -233,12 +233,12 @@ jobs:
               "content_type": "application/gzip"
             },
             {
-              "path": "run-nodejs-16.oci",
+              "path": "build-nodejs-16/run.oci",
               "name": ($repo + "-" + $tag + "-" + "run-nodejs-16.oci"),
               "content_type": "application/gzip"
             },
             {
-              "path": "run-nodejs-18.oci",
+              "path": "build-nodejs-18/run.oci",
               "name": ($repo + "-" + $tag + "-" + "run-nodejs-18.oci"),
               "content_type": "application/gzip"
             }]')"
@@ -261,7 +261,7 @@ jobs:
   failure:
     name: Alert on Failure
     runs-on: ubuntu-22.04
-    needs: [poll_usns, create_stack, diff, test, release, packages_changed, stack_files_changed]
+    needs: [create_stack, test, release, stack_files_changed]
     if: ${{ always() && needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' || needs.stack_files_changed.result == 'failure' }}
     steps:
     - name: File Failure Alert Issue
