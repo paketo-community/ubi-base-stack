@@ -1,6 +1,6 @@
 id = "io.buildpacks.stacks.ubi8"
 homepage = "https://github.com/paketo-community/ubi-base-stack"
-maintainer = "Red Hat"
+maintainer = "Paketo Community"
 
 platforms = ["linux/amd64"]
 
