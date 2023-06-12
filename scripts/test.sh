@@ -47,7 +47,7 @@ function main() {
     util::print::title "Cleaning up preexisting stack archives..."
     rm -rf "${OUTPUT_DIR}"
     rm -rf "${OUTPUT_DIR_NODEJS16}"
-    rm -rf "${OUTPUT_DIR_NODEJS16}"
+    rm -rf "${OUTPUT_DIR_NODEJS18}"
   fi
 
   if ! [[ -f "${OUTPUT_DIR}/build.oci" ]] || ! [[ -f "${OUTPUT_DIR}/run.oci" ]] || ! [[ -f "${OUTPUT_DIR_NODEJS16}/run.oci" ]] || ! [[ -f "${OUTPUT_DIR_NODEJS18}/run.oci" ]]; then
