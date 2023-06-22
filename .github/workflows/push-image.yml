@@ -63,7 +63,7 @@ jobs:
       env:
         DOCKERHUB_USERNAME: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_USERNAME }}
         DOCKERHUB_PASSWORD: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_PASSWORD }}
-        DOCKERHUB_ORG: "paketobuildpacks"
+        DOCKERHUB_ORG: "paketocommunity"
         GCR_USERNAME: _json_key
         GCR_PASSWORD: ${{ secrets.GCR_PUSH_BOT_JSON_KEY }}
         GCR_PROJECT: "paketo-community"
