@@ -39,7 +39,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Fetch previous build sha256 image hash code
+      - name: Find and Download Previous build sha256 image hash code
         id: fetch_previous_build_sha256_image_hash_code
         uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
         with:
@@ -49,7 +49,7 @@ jobs:
           output_path: "/github/workspace/${{ env.UBI_BUILD_SHA256_FILENAME }}"
           token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
-      - name: Fetch previous run sha256 image hash code
+      - name: Find and Download Previous run sha256 image hash code
         id: fetch_previous_run_sha256_image_hash_code
         uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
         with:
@@ -59,7 +59,7 @@ jobs:
           output_path: "/github/workspace/${{ env.UBI_RUN_SHA256_FILENAME }}"
           token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
-      - name: Fetch previous run Node.js 16 sha256 image hash code
+      - name: Find and Download Previous run Node.js 16 sha256 image hash code
         id: fetch_previous_run_nodejs_16_sha256_image_hash_code
         uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
         with:
@@ -69,7 +69,7 @@ jobs:
           output_path: "/github/workspace/${{ env.UBI_RUN_NODEJS_16_SHA256_FILENAME }}"
           token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
-      - name: Fetch previous run Node.js 18 sha256 image hash code
+      - name: Find and Download Previous run Node.js 18 sha256 image hash code
         id: fetch_previous_run_nodejs_18_sha256_image_hash_code
         uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
         with:
@@ -85,15 +85,6 @@ jobs:
 
           ubi_images_need_update=()
 
-          # Run Image
-          docker pull registry.access.redhat.com/ubi8/ubi-minimal
-          current_run_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/ubi-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
-          previous_run_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_SHA256_FILENAME }})
-
-          if [ "$previous_run_sha256_image_hash_code" != "$current_run_sha256_image_hash_code" ]; then
-            ubi_images_need_update+=("node-run")
-          fi
-
           # Build Image
           docker pull registry.access.redhat.com/ubi8/ubi-minimal
           current_build_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/ubi-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
@@ -103,8 +94,14 @@ jobs:
             ubi_images_need_update+=("node-build")
           fi
 
-          json_ubi_images_need_update=$(jq --compact-output --null-input '$ARGS.positional' --args -- "${ubi_images_need_update[@]}")
-          printf "ubi_images_need_update=%s\n" "${json_ubi_images_need_update}" >> "$GITHUB_OUTPUT"
+          # Run Image
+          docker pull registry.access.redhat.com/ubi8/ubi-minimal
+          current_run_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/ubi-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
+          previous_run_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_SHA256_FILENAME }})
+
+          if [ "$previous_run_sha256_image_hash_code" != "$current_run_sha256_image_hash_code" ]; then
+            ubi_images_need_update+=("node-run")
+          fi
 
           # Run Image Node.js 16
           docker pull registry.access.redhat.com/ubi8/nodejs-16-minimal
@@ -115,8 +112,6 @@ jobs:
             ubi_images_need_update+=("node-16-run")
           fi
 
-          ubi_images_need_update+=("node-16-run")
-
           # Run Image Node.js 18
           docker pull registry.access.redhat.com/ubi8/nodejs-18-minimal
           current_run_nodejs_18_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/nodejs-18-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
@@ -125,6 +120,9 @@ jobs:
           if [ "$previous_run_nodejs_18_sha256_image_hash_code" != "$current_run_nodejs_18_sha256_image_hash_code" ]; then
             ubi_images_need_update+=("node-18-run")
           fi
+
+          json_ubi_images_need_update=$(jq --compact-output --null-input '$ARGS.positional' --args -- "${ubi_images_need_update[@]}")
+          printf "ubi_images_need_update=%s\n" "${json_ubi_images_need_update}" >> "$GITHUB_OUTPUT"
 
   create_stack:
     name: Create Stack
@@ -140,12 +138,6 @@ jobs:
         id: create-stack
         uses: paketo-buildpacks/github-config/actions/stack/create-stack@main
 
-      - name: Upload nodejs 16 run image
-        uses: actions/upload-artifact@v3
-        with:
-          name: current-nodejs-16-run-image
-          path: ./build-nodejs-16/run.oci
-
       ## build image
       - name: Upload build image
         uses: actions/upload-artifact@v3
@@ -156,8 +148,7 @@ jobs:
       - name: Get build image hash code
         run: |
           mkdir -p hash-codes/build
-          # improvement: we dont have to re-download the image to get the hash code,
-          # we can pass the hash code from the previous step
+
           docker pull registry.access.redhat.com/ubi8/ubi-minimal
           current_build_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/ubi-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
           echo $current_build_sha256_image_hash_code > hash-codes/build/build.oci.sha256
@@ -178,8 +169,6 @@ jobs:
       - name: Get run image hash code
         run: |
           mkdir -p hash-codes/build
-          # improvement: we dont have to re-download the image to get the hash code,
-          # we can pass the hash code from the previous step
           docker pull registry.access.redhat.com/ubi8/ubi-minimal
           current_run_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/ubi-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
           echo $current_run_sha256_image_hash_code > hash-codes/build/run.oci.sha256
@@ -191,11 +180,16 @@ jobs:
           path: hash-codes/build/run.oci.sha256
 
       ## nodejs 16 run image
+
+      - name: Upload nodejs 16 run image
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-nodejs-16-run-image
+          path: ./build-nodejs-16/run.oci
+
       - name: Get nodejs 16 run image hash code
         run: |
           mkdir -p hash-codes/build-nodejs-16
-          # improvement: we dont have to re-download the image to get the hash code,
-          # we can pass the hash code from the previous step
           docker pull registry.access.redhat.com/ubi8/nodejs-16-minimal
           current_run_nodejs_16_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/nodejs-16-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
           echo $current_run_nodejs_16_sha256_image_hash_code > hash-codes/build-nodejs-16/run.oci.sha256
@@ -216,8 +210,6 @@ jobs:
       - name: Get nodejs 18 run image hash code
         run: |
           mkdir -p hash-codes/build-nodejs-18
-          # improvement: we dont have to re-download the image to get the hash code,
-          # we can pass the hash code from the previous step
           docker pull registry.access.redhat.com/ubi8/nodejs-18-minimal
           current_run_nodejs_18_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/nodejs-18-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
           echo $current_run_nodejs_18_sha256_image_hash_code > hash-codes/build-nodejs-18/run.oci.sha256
