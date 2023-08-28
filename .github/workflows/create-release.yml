@@ -1,8 +1,9 @@
 name: Create Release
 # Add a matrix for the node versions to check against
+
 on:
   schedule:
-    - cron: "*/30 * * * *" # every 30 minutes
+    - cron: "*/30 * * * *"  # every 30 minutes
   push:
     branches:
       - main
@@ -84,7 +85,7 @@ jobs:
 
           ubi_images_need_update=()
 
-          # Run Image 
+          # Run Image
           docker pull registry.access.redhat.com/ubi8/ubi-minimal
           current_run_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/ubi-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
           previous_run_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_SHA256_FILENAME }})
@@ -93,7 +94,7 @@ jobs:
             ubi_images_need_update+=("node-run")
           fi
 
-          # Build Image 
+          # Build Image
           docker pull registry.access.redhat.com/ubi8/ubi-minimal
           current_build_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/ubi-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
           previous_build_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_BUILD_SHA256_FILENAME }})
@@ -271,7 +272,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0 # gets full history
+          fetch-depth: 0  # gets full history
 
       - name: Download nodejs-16 Run Image
         uses: actions/download-artifact@v3
@@ -358,7 +359,7 @@ jobs:
           release_body="\#\# Images"
           release_body+=" \<br \/\> "
 
-          release_body+="Build: paketocommunity/build${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"          
+          release_body+="Build: paketocommunity/build${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
           release_body+=" \<br \/\> "
 
           release_body+="Run: paketocommunity/run-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
