@@ -120,7 +120,7 @@ jobs:
           # Run Image Node.js 18
           docker pull registry.access.redhat.com/ubi8/nodejs-18-minimal
           current_run_nodejs_18_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/nodejs-18-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
-          previous_run_nodejs_18_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_16_SHA256_FILENAME }})
+          previous_run_nodejs_18_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_18_SHA256_FILENAME }})
           ubi_image_previous_hash_codes+=("node-18-run" $previous_run_nodejs_18_sha256_image_hash_code)
 
           if [ "$previous_run_nodejs_18_sha256_image_hash_code" != "$current_run_nodejs_18_sha256_image_hash_code" ]; then
@@ -202,7 +202,7 @@ jobs:
             current_run_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/ubi-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
           else
             for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
-              if [ "${ubi_image_previous_hash_codes[i]}" == "node-build" ]; then
+              if [ "${ubi_image_previous_hash_codes[i]}" == "node-run" ]; then
                 current_run_sha256_image_hash_code=${ubi_image_previous_hash_codes[i + 1]}
               fi
             done
@@ -237,7 +237,7 @@ jobs:
             current_run_nodejs_16_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/nodejs-16-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
           else
             for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
-              if [ "${ubi_image_previous_hash_codes[i]}" == "node-build" ]; then
+              if [ "${ubi_image_previous_hash_codes[i]}" == "node-16-run" ]; then
                 current_run_nodejs_16_sha256_image_hash_code=${ubi_image_previous_hash_codes[i + 1]}
               fi
             done
@@ -271,7 +271,7 @@ jobs:
             current_run_nodejs_18_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/nodejs-18-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
           else
             for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
-              if [ "${ubi_image_previous_hash_codes[i]}" == "node-build" ]; then
+              if [ "${ubi_image_previous_hash_codes[i]}" == "node-18-run" ]; then
                 current_run_nodejs_18_sha256_image_hash_code=${ubi_image_previous_hash_codes[i + 1]}
               fi
             done
