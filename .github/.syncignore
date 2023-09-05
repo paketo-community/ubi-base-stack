@@ -1,0 +1,8 @@
+CODEOWNERS
+.github/workflows/create-release.yml
+.github/workflows/push-image.yml
+scripts/tests.sh
+scripts/create-one.sh
+scripts/create.sh
+scripts/load-images-to-local-repository.sh
+scripts/load-images-to-quay.sh
