@@ -300,11 +300,36 @@ jobs:
 
       - name: Create OCI artifacts destination directory
         run: |
+          mkdir -p build
+          mkdir -p build-nodejs-16
+          mkdir -p build-nodejs-18
+
+      - name: Download Build Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-build-image
+          path: build
+
+      - name: Download Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-run-image
+          path: build
+
+      - name: Download nodejs-16 Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-nodejs-16-run-image
+          path: build-nodejs-16
+
+      - name: Download nodejs-18 Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-nodejs-18-run-image
+          path: build-nodejs-18
 
       - name: Run Acceptance Tests
-        # run: ./scripts/test.sh
-        run: |
-          echo "ommit for now, till acceptance tests pass."
+        run: scripts/test.sh
 
   force_release_creation:
     name: Force Release Creation
@@ -331,6 +356,30 @@ jobs:
         with:
           fetch-depth: 0  # gets full history
 
+      - name: Download Build Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-build-image
+          path: build
+
+      - name: Download Build Image hash code
+        uses: actions/download-artifact@v3
+        with:
+          name: current-build-image-hash-code
+          path: build
+
+      - name: Download Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-run-image
+          path: build
+
+      - name: Download Run Image hash code
+        uses: actions/download-artifact@v3
+        with:
+          name: current-run-image-hash-code
+          path: build
+
       - name: Download nodejs-16 Run Image
         uses: actions/download-artifact@v3
         with:
@@ -354,30 +403,6 @@ jobs:
         with:
           name: current-nodejs-18-run-image-hash-code
           path: build-nodejs-18
-
-      - name: Download Run Image
-        uses: actions/download-artifact@v3
-        with:
-          name: current-run-image
-          path: build
-
-      - name: Download Run Image hash code
-        uses: actions/download-artifact@v3
-        with:
-          name: current-run-image-hash-code
-          path: build
-
-      - name: Download Build Image
-        uses: actions/download-artifact@v3
-        with:
-          name: current-build-image
-          path: build
-
-      - name: Download Build Image hash code
-        uses: actions/download-artifact@v3
-        with:
-          name: current-build-image-hash-code
-          path: build
 
       - name: Increment Tag
         if: github.event.inputs.version == ''

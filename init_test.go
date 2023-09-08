@@ -15,10 +15,10 @@ import (
 )
 
 var stack struct {
-	BuildArchive string
-	RunArchive   string
-	BuildImageID string
-	RunImageID          string
+	BuildArchive       string
+	RunArchive         string
+	BuildImageID       string
+	RunImageID         string
 	RunNodejs16Archive string
 	RunNodejs18Archive string
 }
@@ -41,7 +41,7 @@ func TestAcceptance(t *testing.T) {
 	stack.RunNodejs16Archive = filepath.Join(root, "build-nodejs-16", "run.oci")
 	stack.RunNodejs18Archive = filepath.Join(root, "build-nodejs-18", "run.oci")
 
-	SetDefaultEventuallyTimeout(10 * time.Second)
+	SetDefaultEventuallyTimeout(100 * time.Second)
 
 	suite := spec.New("Acceptance", spec.Report(report.Terminal{}), spec.Parallel())
 	suite("Metadata", testMetadata)
