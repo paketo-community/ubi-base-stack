@@ -72,7 +72,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.ubi8"),
 				HaveKeyWithValue("io.buildpacks.stack.description", "base build ubi8 image to support buildpacks"),
 				HaveKeyWithValue("io.buildpacks.stack.distro.name", "rhel"),
-				// HaveKeyWithValue("io.buildpacks.stack.distro.version", "8.8"),
+				HaveKeyWithValue("io.buildpacks.stack.distro.version", "8.8"),
 				HaveKeyWithValue("io.buildpacks.stack.homepage", "https://github.com/paketo-community/ubi-base-stack"),
 				HaveKeyWithValue("io.buildpacks.stack.maintainer", "Paketo Community"),
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
@@ -134,7 +134,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.ubi8"),
 				HaveKeyWithValue("io.buildpacks.stack.description", "base run ubi8 image to support buildpacks"),
 				HaveKeyWithValue("io.buildpacks.stack.distro.name", "rhel"),
-				// HaveKeyWithValue("io.buildpacks.stack.distro.version", "8.8"),
+				HaveKeyWithValue("io.buildpacks.stack.distro.version", "8.8"),
 				HaveKeyWithValue("io.buildpacks.stack.homepage", "https://github.com/paketo-community/ubi-base-stack"),
 				HaveKeyWithValue("io.buildpacks.stack.maintainer", "Paketo Community"),
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
@@ -152,15 +152,12 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveDirectory("/home/cnb"),
 			))
 
-			// There is not /etc/os-release file inside the run imagse.
-			// Uncomment below code when the /etc/os-release file has been added.
-
-			// Expect(image).To(HaveFileWithContent("/etc/os-release", SatisfyAll(
-			// 	ContainSubstring(`PRETTY_NAME="Red Hat Enterprise Linux 8.8 (Ootpa)"`),
-			// 	ContainSubstring(`HOME_URL="https://github.com/paketo-community/ubi-base-stack"`),
-			// 	ContainSubstring(`SUPPORT_URL="https://github.com/paketo-community/ubi-base-stack/blob/main/README.md"`),
-			// 	ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-community/ubi-base-stack/issues/new"`),
-			// )))
+			Expect(image).To(HaveFileWithContent("/etc/os-release", SatisfyAll(
+				ContainSubstring(`PRETTY_NAME="Red Hat Enterprise Linux 8.8 (Ootpa)"`),
+				ContainSubstring(`HOME_URL="https://github.com/paketo-community/ubi-base-stack"`),
+				ContainSubstring(`SUPPORT_URL="https://github.com/paketo-community/ubi-base-stack/blob/main/README.md"`),
+				ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-community/ubi-base-stack/issues/new"`),
+			)))
 		})
 
 		by("confirming that the run nodejs-16 image is correct", func() {
@@ -218,15 +215,12 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveDirectory("/home/cnb"),
 			))
 
-			// There is not /etc/os-release file inside the run imagse.
-			// Uncomment below code when the /etc/os-release file has been added.
-
-			// Expect(image).To(HaveFileWithContent("/etc/os-release", SatisfyAll(
-			// 	ContainSubstring(`PRETTY_NAME="Red Hat Enterprise Linux 8.8 (Ootpa)"`),
-			// 	ContainSubstring(`HOME_URL="https://github.com/paketo-community/ubi-base-stack"`),
-			// 	ContainSubstring(`SUPPORT_URL="https://github.com/paketo-community/ubi-base-stack/blob/main/README.md"`),
-			// 	ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-community/ubi-base-stack/issues/new"`),
-			// )))
+			Expect(image).To(HaveFileWithContent("/etc/os-release", SatisfyAll(
+				ContainSubstring(`PRETTY_NAME="Red Hat Enterprise Linux 8.8 (Ootpa)"`),
+				ContainSubstring(`HOME_URL="https://github.com/paketo-community/ubi-base-stack"`),
+				ContainSubstring(`SUPPORT_URL="https://github.com/paketo-community/ubi-base-stack/blob/main/README.md"`),
+				ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-community/ubi-base-stack/issues/new"`),
+			)))
 		})
 
 		by("confirming that the run nodejs-18 image is correct", func() {
@@ -266,7 +260,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.ubi8"),
 				HaveKeyWithValue("io.buildpacks.stack.description", "ubi8 nodejs-18 image to support buildpacks"),
 				HaveKeyWithValue("io.buildpacks.stack.distro.name", "rhel"),
-				// HaveKeyWithValue("io.buildpacks.stack.distro.version", "8.8"),
+				HaveKeyWithValue("io.buildpacks.stack.distro.version", "8.8"),
 				HaveKeyWithValue("io.buildpacks.stack.homepage", "https://github.com/paketo-community/ubi-base-stack"),
 				HaveKeyWithValue("io.buildpacks.stack.maintainer", "Paketo Community"),
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
@@ -284,15 +278,12 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveDirectory("/home/cnb"),
 			))
 
-			// There is not /etc/os-release file inside the run imagse.
-			// Uncomment below code when the /etc/os-release file has been added.
-
-			// Expect(image).To(HaveFileWithContent("/etc/os-release", SatisfyAll(
-			// 	ContainSubstring(`PRETTY_NAME="Red Hat Enterprise Linux 8.8 (Ootpa)"`),
-			// 	ContainSubstring(`HOME_URL="https://github.com/paketo-community/ubi-base-stack"`),
-			// 	ContainSubstring(`SUPPORT_URL="https://github.com/paketo-community/ubi-base-stack/blob/main/README.md"`),
-			// 	ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-community/ubi-base-stack/issues/new"`),
-			// )))
+			Expect(image).To(HaveFileWithContent("/etc/os-release", SatisfyAll(
+				ContainSubstring(`PRETTY_NAME="Red Hat Enterprise Linux 8.8 (Ootpa)"`),
+				ContainSubstring(`HOME_URL="https://github.com/paketo-community/ubi-base-stack"`),
+				ContainSubstring(`SUPPORT_URL="https://github.com/paketo-community/ubi-base-stack/blob/main/README.md"`),
+				ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-community/ubi-base-stack/issues/new"`),
+			)))
 		})
 
 		Expect(runReleaseDate).To(Equal(buildReleaseDate))
