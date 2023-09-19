@@ -17,8 +17,6 @@ jobs:
         echo "tag=$(jq -r '.release.tag_name' "${GITHUB_EVENT_PATH}" | sed s/^v//)" >> "$GITHUB_OUTPUT"
         echo "build_download_url=$(jq -r '.release.assets[] | select(.name | endswith("build.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
         echo "run_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
-        echo "run_nodejs_16_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-nodejs-16.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
-        echo "run_nodejs_18_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-nodejs-18.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
 
     - name: Checkout
       uses: actions/checkout@v3
@@ -37,20 +35,6 @@ jobs:
         output: "/github/workspace/run.oci"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
-    - name: Download nodejs-16 Run Image
-      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
-      with:
-        url: ${{ steps.event.outputs.run_nodejs_16_download_url }}
-        output: "/github/workspace/run-nodejs-16.oci"
-        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-    - name: Download nodejs-18 Run Image
-      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
-      with:
-        url: ${{ steps.event.outputs.run_nodejs_18_download_url }}
-        output: "/github/workspace/run-nodejs-18.oci"
-        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
     - name: Get Registry Repo Name
       id: registry-repo
       run: |
@@ -63,10 +47,10 @@ jobs:
       env:
         DOCKERHUB_USERNAME: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_USERNAME }}
         DOCKERHUB_PASSWORD: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_PASSWORD }}
-        DOCKERHUB_ORG: "paketocommunity"
+        DOCKERHUB_ORG: "paketobuildpacks"
         GCR_USERNAME: _json_key
         GCR_PASSWORD: ${{ secrets.GCR_PUSH_BOT_JSON_KEY }}
-        GCR_PROJECT: "paketo-community"
+        GCR_PROJECT: "paketo-buildpacks"
       run: |
         echo "${DOCKERHUB_PASSWORD}" | sudo skopeo login --username "${DOCKERHUB_USERNAME}" --password-stdin index.docker.io
         echo "${GCR_PASSWORD}" | sudo skopeo login --username "${GCR_USERNAME}" --password-stdin gcr.io
@@ -83,17 +67,31 @@ jobs:
         sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://gcr.io/${GCR_PROJECT}/run-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
         sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://gcr.io/${GCR_PROJECT}/run-${{ steps.registry-repo.outputs.name }}:latest"
 
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-16.oci" "docker://${DOCKERHUB_ORG}/run-nodejs-16-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-16.oci" "docker://${DOCKERHUB_ORG}/run-nodejs-16-${{ steps.registry-repo.outputs.name }}:latest"
+        # If the repository name contains 'bionic', let's push it to legacy image locations as well:
+        #    paketobuildpacks/{build/run}:{version}-{variant}
+        #    paketobuildpacks/{build/run}:{version}-{variant}-cnb
+        #    paketobuildpacks/{build/run}:{variant}-cnb
+        #    paketobuildpacks/{build/run}:{variant}
+        registry_repo="${{ steps.registry-repo.outputs.name }}"
+        if [[ ${registry_repo} == "bionic"-* ]];
+          then
+          # Strip the final part from a repo name after the `-`
+          # bionic-tiny --> tiny
+          variant="${registry_repo#bionic-}"
 
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-16.oci" "docker://gcr.io/${GCR_PROJECT}/run-nodejs-16-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-16.oci" "docker://gcr.io/${GCR_PROJECT}/run-nodejs-16-${{ steps.registry-repo.outputs.name }}:latest"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build:${{ steps.event.outputs.tag }}-${variant}"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build:${{ steps.event.outputs.tag }}-${variant}-cnb"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build:${variant}-cnb"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build:${variant}"
 
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-18.oci" "docker://${DOCKERHUB_ORG}/run-nodejs-18-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-18.oci" "docker://${DOCKERHUB_ORG}/run-nodejs-18-${{ steps.registry-repo.outputs.name }}:latest"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${{ steps.event.outputs.tag }}-${variant}"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${{ steps.event.outputs.tag }}-${variant}-cnb"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${variant}-cnb"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${variant}"
 
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-18.oci" "docker://gcr.io/${GCR_PROJECT}/run-nodejs-18-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-18.oci" "docker://gcr.io/${GCR_PROJECT}/run-nodejs-18-${{ steps.registry-repo.outputs.name }}:latest"
+          sudo skopeo copy "docker://${DOCKERHUB_ORG}/build:${variant}-cnb" "docker://gcr.io/${GCR_PROJECT}/build:${variant}-cnb"
+          sudo skopeo copy "docker://${DOCKERHUB_ORG}/run:${variant}-cnb" "docker://gcr.io/${GCR_PROJECT}/run:${variant}-cnb"
+        fi
 
 
   failure:
