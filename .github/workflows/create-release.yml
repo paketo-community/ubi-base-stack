@@ -1,5 +1,4 @@
 name: Create Release
-# Add a matrix for the node versions to check against
 
 on:
   schedule:
