@@ -87,8 +87,7 @@ jobs:
           ubi_image_previous_hash_codes=()
 
           # Build Image
-          docker pull registry.access.redhat.com/ubi8/ubi-minimal
-          current_build_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/ubi-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
+          current_build_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
           previous_build_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_BUILD_SHA256_FILENAME }})
           ubi_image_previous_hash_codes+=("node-build" $previous_build_sha256_image_hash_code)
 
@@ -97,8 +96,7 @@ jobs:
           fi
 
           # Run Image
-          docker pull registry.access.redhat.com/ubi8/ubi-minimal
-          current_run_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/ubi-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
+          current_run_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
           previous_run_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_SHA256_FILENAME }})
           ubi_image_previous_hash_codes+=("node-run" $previous_run_sha256_image_hash_code)
 
@@ -107,8 +105,7 @@ jobs:
           fi
 
           # Run Image Node.js 16
-          docker pull registry.access.redhat.com/ubi8/nodejs-16-minimal
-          current_run_nodejs_16_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/nodejs-16-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
+          current_run_nodejs_16_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-16-minimal)
           previous_run_nodejs_16_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_16_SHA256_FILENAME }})
           ubi_image_previous_hash_codes+=("node-16-run" $previous_run_nodejs_16_sha256_image_hash_code)
 
@@ -117,8 +114,7 @@ jobs:
           fi
 
           # Run Image Node.js 18
-          docker pull registry.access.redhat.com/ubi8/nodejs-18-minimal
-          current_run_nodejs_18_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/nodejs-18-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
+          current_run_nodejs_18_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-18-minimal)
           previous_run_nodejs_18_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_18_SHA256_FILENAME }})
           ubi_image_previous_hash_codes+=("node-18-run" $previous_run_nodejs_18_sha256_image_hash_code)
 
@@ -163,8 +159,7 @@ jobs:
 
           current_build_sha256_image_hash_code=""
           if echo "${ubi_images_need_update[@]}" | grep -qw "node-build"; then
-            docker pull registry.access.redhat.com/ubi8/ubi-minimal
-            current_build_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/ubi-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
+            current_build_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
           else
             for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
               if [ "${ubi_image_previous_hash_codes[i]}" == "node-build" ]; then
@@ -197,8 +192,7 @@ jobs:
 
           current_run_sha256_image_hash_code=""
           if echo "${ubi_images_need_update[@]}" | grep -qw "node-run"; then
-            docker pull registry.access.redhat.com/ubi8/ubi-minimal
-            current_run_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/ubi-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
+            current_run_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
           else
             for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
               if [ "${ubi_image_previous_hash_codes[i]}" == "node-run" ]; then
@@ -232,8 +226,7 @@ jobs:
 
           current_run_nodejs_16_sha256_image_hash_code=""
           if echo "${ubi_images_need_update[@]}" | grep -qw "node-16-run"; then
-            docker pull registry.access.redhat.com/ubi8/nodejs-16-minimal
-            current_run_nodejs_16_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/nodejs-16-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
+            current_run_nodejs_16_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-16-minimal)
           else
             for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
               if [ "${ubi_image_previous_hash_codes[i]}" == "node-16-run" ]; then
@@ -266,8 +259,7 @@ jobs:
 
           current_run_nodejs_18_sha256_image_hash_code=""
           if echo "${ubi_images_need_update[@]}" | grep -qw "node-18-run"; then
-            docker pull registry.access.redhat.com/ubi8/nodejs-18-minimal
-            current_run_nodejs_18_sha256_image_hash_code=$(docker image inspect registry.access.redhat.com/ubi8/nodejs-18-minimal --format '{{json .RepoDigests}}' | jq -r '.[0]')
+            current_run_nodejs_18_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-18-minimal)
           else
             for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
               if [ "${ubi_image_previous_hash_codes[i]}" == "node-18-run" ]; then
