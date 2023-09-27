@@ -34,6 +34,7 @@ jobs:
     outputs:
       ubi_images_need_update: ${{ steps.compare_previous_and_current_sha256_hash_codes.outputs.ubi_images_need_update }}
       ubi_image_previous_hash_codes: ${{ steps.compare_previous_and_current_sha256_hash_codes.outputs.ubi_image_previous_hash_codes }}
+      ubi_image_current_hash_codes: ${{ steps.compare_previous_and_current_sha256_hash_codes.outputs.ubi_image_current_hash_codes }}
 
     steps:
       - name: Checkout
@@ -85,11 +86,13 @@ jobs:
 
           ubi_images_need_update=()
           ubi_image_previous_hash_codes=()
+          ubi_image_current_hash_codes=()
 
           # Build Image
           current_build_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
           previous_build_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_BUILD_SHA256_FILENAME }})
           ubi_image_previous_hash_codes+=("node-build" $previous_build_sha256_image_hash_code)
+          ubi_image_current_hash_codes+=("node-build" $current_build_sha256_image_hash_code)
 
           if [ "$previous_build_sha256_image_hash_code" != "$current_build_sha256_image_hash_code" ]; then
             ubi_images_need_update+=("node-build")
@@ -99,6 +102,7 @@ jobs:
           current_run_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
           previous_run_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_SHA256_FILENAME }})
           ubi_image_previous_hash_codes+=("node-run" $previous_run_sha256_image_hash_code)
+          ubi_image_current_hash_codes+=("node-run" $current_run_sha256_image_hash_code)
 
           if [ "$previous_run_sha256_image_hash_code" != "$current_run_sha256_image_hash_code" ]; then
             ubi_images_need_update+=("node-run")
@@ -108,6 +112,7 @@ jobs:
           current_run_nodejs_16_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-16-minimal)
           previous_run_nodejs_16_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_16_SHA256_FILENAME }})
           ubi_image_previous_hash_codes+=("node-16-run" $previous_run_nodejs_16_sha256_image_hash_code)
+          ubi_image_current_hash_codes+=("node-16-run" $current_run_nodejs_16_sha256_image_hash_code)
 
           if [ "$previous_run_nodejs_16_sha256_image_hash_code" != "$current_run_nodejs_16_sha256_image_hash_code" ]; then
             ubi_images_need_update+=("node-16-run")
@@ -117,6 +122,7 @@ jobs:
           current_run_nodejs_18_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-18-minimal)
           previous_run_nodejs_18_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_18_SHA256_FILENAME }})
           ubi_image_previous_hash_codes+=("node-18-run" $previous_run_nodejs_18_sha256_image_hash_code)
+          ubi_image_current_hash_codes+=("node-18-run" $current_run_nodejs_18_sha256_image_hash_code)
 
           if [ "$previous_run_nodejs_18_sha256_image_hash_code" != "$current_run_nodejs_18_sha256_image_hash_code" ]; then
             ubi_images_need_update+=("node-18-run")
@@ -127,6 +133,9 @@ jobs:
 
           json_ubi_image_previous_hash_codes=$(jq --compact-output --null-input '$ARGS.positional' --args -- "${ubi_image_previous_hash_codes[@]}")
           printf "ubi_image_previous_hash_codes=%s\n" "${json_ubi_image_previous_hash_codes}" >> "$GITHUB_OUTPUT"
+
+          json_ubi_image_current_hash_codes=$(jq --compact-output --null-input '$ARGS.positional' --args -- "${ubi_image_current_hash_codes[@]}")
+          printf "ubi_image_current_hash_codes=%s\n" "${json_ubi_image_current_hash_codes}" >> "$GITHUB_OUTPUT"
 
   create_stack:
     name: Create Stack
@@ -156,10 +165,15 @@ jobs:
 
           ubi_images_need_update=($(echo '${{ needs.poll_ubi_images.outputs.ubi_images_need_update }}' | jq -r '.[]'))
           ubi_image_previous_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_previous_hash_codes }}' | jq -r '.[]'))
+          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
 
           current_build_sha256_image_hash_code=""
           if echo "${ubi_images_need_update[@]}" | grep -qw "node-build"; then
-            current_build_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
+            for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
+              if [ "${ubi_image_current_hash_codes[i]}" == "node-build" ]; then
+                current_build_sha256_image_hash_code=${ubi_image_current_hash_codes[i + 1]}
+              fi
+            done
           else
             for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
               if [ "${ubi_image_previous_hash_codes[i]}" == "node-build" ]; then
@@ -189,10 +203,15 @@ jobs:
 
           ubi_images_need_update=($(echo '${{ needs.poll_ubi_images.outputs.ubi_images_need_update }}' | jq -r '.[]'))
           ubi_image_previous_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_previous_hash_codes }}' | jq -r '.[]'))
+          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
 
           current_run_sha256_image_hash_code=""
           if echo "${ubi_images_need_update[@]}" | grep -qw "node-run"; then
-            current_run_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
+            for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
+              if [ "${ubi_image_current_hash_codes[i]}" == "node-run" ]; then
+                current_run_sha256_image_hash_code=${ubi_image_current_hash_codes[i + 1]}
+              fi
+            done
           else
             for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
               if [ "${ubi_image_previous_hash_codes[i]}" == "node-run" ]; then
@@ -223,10 +242,15 @@ jobs:
 
           ubi_images_need_update=($(echo '${{ needs.poll_ubi_images.outputs.ubi_images_need_update }}' | jq -r '.[]'))
           ubi_image_previous_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_previous_hash_codes }}' | jq -r '.[]'))
+          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
 
           current_run_nodejs_16_sha256_image_hash_code=""
           if echo "${ubi_images_need_update[@]}" | grep -qw "node-16-run"; then
-            current_run_nodejs_16_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-16-minimal)
+            for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
+              if [ "${ubi_image_current_hash_codes[i]}" == "node-16-run" ]; then
+                current_run_nodejs_16_sha256_image_hash_code=${ubi_image_current_hash_codes[i + 1]}
+              fi
+            done
           else
             for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
               if [ "${ubi_image_previous_hash_codes[i]}" == "node-16-run" ]; then
@@ -256,10 +280,15 @@ jobs:
 
           ubi_images_need_update=($(echo '${{ needs.poll_ubi_images.outputs.ubi_images_need_update }}' | jq -r '.[]'))
           ubi_image_previous_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_previous_hash_codes }}' | jq -r '.[]'))
+          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
 
           current_run_nodejs_18_sha256_image_hash_code=""
           if echo "${ubi_images_need_update[@]}" | grep -qw "node-18-run"; then
-            current_run_nodejs_18_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-18-minimal)
+            for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
+              if [ "${ubi_image_current_hash_codes[i]}" == "node-18-run" ]; then
+                current_run_nodejs_18_sha256_image_hash_code=${ubi_image_current_hash_codes[i + 1]}
+              fi
+            done
           else
             for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
               if [ "${ubi_image_previous_hash_codes[i]}" == "node-18-run" ]; then
