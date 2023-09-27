@@ -409,7 +409,7 @@ jobs:
           if [ -z "${tag}" ]; then
             tag="${{ steps.semver.outputs.tag }}"
           fi
-          echo "This is the tag ${tag}"
+          echo "tag=${tag}"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
       - name: Get Repository Name
@@ -494,7 +494,7 @@ jobs:
                 "content_type": "application/gzip"
               }]')"
 
-          echo $assets
+          printf "assets=%s\n" "${assets}"
           printf "assets=%s\n" "${assets}" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
