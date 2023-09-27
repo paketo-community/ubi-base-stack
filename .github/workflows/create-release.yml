@@ -85,13 +85,11 @@ jobs:
         run: |
 
           ubi_images_need_update=()
-          ubi_image_previous_hash_codes=()
           ubi_image_current_hash_codes=()
 
           # Build Image
           current_build_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
           previous_build_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_BUILD_SHA256_FILENAME }})
-          ubi_image_previous_hash_codes+=("node-build" $previous_build_sha256_image_hash_code)
           ubi_image_current_hash_codes+=("node-build" $current_build_sha256_image_hash_code)
 
           if [ "$previous_build_sha256_image_hash_code" != "$current_build_sha256_image_hash_code" ]; then
@@ -101,7 +99,6 @@ jobs:
           # Run Image
           current_run_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
           previous_run_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_SHA256_FILENAME }})
-          ubi_image_previous_hash_codes+=("node-run" $previous_run_sha256_image_hash_code)
           ubi_image_current_hash_codes+=("node-run" $current_run_sha256_image_hash_code)
 
           if [ "$previous_run_sha256_image_hash_code" != "$current_run_sha256_image_hash_code" ]; then
@@ -111,7 +108,6 @@ jobs:
           # Run Image Node.js 16
           current_run_nodejs_16_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-16-minimal)
           previous_run_nodejs_16_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_16_SHA256_FILENAME }})
-          ubi_image_previous_hash_codes+=("node-16-run" $previous_run_nodejs_16_sha256_image_hash_code)
           ubi_image_current_hash_codes+=("node-16-run" $current_run_nodejs_16_sha256_image_hash_code)
 
           if [ "$previous_run_nodejs_16_sha256_image_hash_code" != "$current_run_nodejs_16_sha256_image_hash_code" ]; then
@@ -121,7 +117,6 @@ jobs:
           # Run Image Node.js 18
           current_run_nodejs_18_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-18-minimal)
           previous_run_nodejs_18_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_18_SHA256_FILENAME }})
-          ubi_image_previous_hash_codes+=("node-18-run" $previous_run_nodejs_18_sha256_image_hash_code)
           ubi_image_current_hash_codes+=("node-18-run" $current_run_nodejs_18_sha256_image_hash_code)
 
           if [ "$previous_run_nodejs_18_sha256_image_hash_code" != "$current_run_nodejs_18_sha256_image_hash_code" ]; then
@@ -130,9 +125,6 @@ jobs:
 
           json_ubi_images_need_update=$(jq --compact-output --null-input '$ARGS.positional' --args -- "${ubi_images_need_update[@]}")
           printf "ubi_images_need_update=%s\n" "${json_ubi_images_need_update}" >> "$GITHUB_OUTPUT"
-
-          json_ubi_image_previous_hash_codes=$(jq --compact-output --null-input '$ARGS.positional' --args -- "${ubi_image_previous_hash_codes[@]}")
-          printf "ubi_image_previous_hash_codes=%s\n" "${json_ubi_image_previous_hash_codes}" >> "$GITHUB_OUTPUT"
 
           json_ubi_image_current_hash_codes=$(jq --compact-output --null-input '$ARGS.positional' --args -- "${ubi_image_current_hash_codes[@]}")
           printf "ubi_image_current_hash_codes=%s\n" "${json_ubi_image_current_hash_codes}" >> "$GITHUB_OUTPUT"
@@ -163,26 +155,13 @@ jobs:
         run: |
           mkdir -p hash-codes/build
 
-          ubi_images_need_update=($(echo '${{ needs.poll_ubi_images.outputs.ubi_images_need_update }}' | jq -r '.[]'))
-          ubi_image_previous_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_previous_hash_codes }}' | jq -r '.[]'))
           ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
 
-          current_build_sha256_image_hash_code=""
-          if echo "${ubi_images_need_update[@]}" | grep -qw "node-build"; then
             for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
               if [ "${ubi_image_current_hash_codes[i]}" == "node-build" ]; then
-                current_build_sha256_image_hash_code=${ubi_image_current_hash_codes[i + 1]}
+                echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build/build.oci.sha256
               fi
             done
-          else
-            for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
-              if [ "${ubi_image_previous_hash_codes[i]}" == "node-build" ]; then
-                current_build_sha256_image_hash_code=${ubi_image_previous_hash_codes[i + 1]}
-              fi
-            done
-          fi
-
-          echo $current_build_sha256_image_hash_code > hash-codes/build/build.oci.sha256
 
       - name: Upload build image hash code
         uses: actions/upload-artifact@v3
@@ -201,26 +180,13 @@ jobs:
         run: |
           mkdir -p hash-codes/build
 
-          ubi_images_need_update=($(echo '${{ needs.poll_ubi_images.outputs.ubi_images_need_update }}' | jq -r '.[]'))
-          ubi_image_previous_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_previous_hash_codes }}' | jq -r '.[]'))
           ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
 
-          current_run_sha256_image_hash_code=""
-          if echo "${ubi_images_need_update[@]}" | grep -qw "node-run"; then
-            for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
-              if [ "${ubi_image_current_hash_codes[i]}" == "node-run" ]; then
-                current_run_sha256_image_hash_code=${ubi_image_current_hash_codes[i + 1]}
-              fi
-            done
-          else
-            for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
-              if [ "${ubi_image_previous_hash_codes[i]}" == "node-run" ]; then
-                current_run_sha256_image_hash_code=${ubi_image_previous_hash_codes[i + 1]}
-              fi
-            done
-          fi
-
-          echo $current_run_sha256_image_hash_code > hash-codes/build/run.oci.sha256
+          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
+            if [ "${ubi_image_current_hash_codes[i]}" == "node-run" ]; then
+              echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build/run.oci.sha256
+            fi
+          done
 
       - name: Upload run image hash code
         uses: actions/upload-artifact@v3
@@ -240,26 +206,13 @@ jobs:
         run: |
           mkdir -p hash-codes/build-nodejs-16
 
-          ubi_images_need_update=($(echo '${{ needs.poll_ubi_images.outputs.ubi_images_need_update }}' | jq -r '.[]'))
-          ubi_image_previous_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_previous_hash_codes }}' | jq -r '.[]'))
           ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
 
-          current_run_nodejs_16_sha256_image_hash_code=""
-          if echo "${ubi_images_need_update[@]}" | grep -qw "node-16-run"; then
-            for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
-              if [ "${ubi_image_current_hash_codes[i]}" == "node-16-run" ]; then
-                current_run_nodejs_16_sha256_image_hash_code=${ubi_image_current_hash_codes[i + 1]}
-              fi
-            done
-          else
-            for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
-              if [ "${ubi_image_previous_hash_codes[i]}" == "node-16-run" ]; then
-                current_run_nodejs_16_sha256_image_hash_code=${ubi_image_previous_hash_codes[i + 1]}
-              fi
-            done
-          fi
-
-          echo $current_run_nodejs_16_sha256_image_hash_code > hash-codes/build-nodejs-16/run.oci.sha256
+          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
+            if [ "${ubi_image_current_hash_codes[i]}" == "node-16-run" ]; then
+              echo ${ubi_image_current_hash_codes[i + 1]}> hash-codes/build-nodejs-16/run.oci.sha256
+            fi
+          done
 
       - name: Upload nodejs 16 run image hash code
         uses: actions/upload-artifact@v3
@@ -278,26 +231,13 @@ jobs:
         run: |
           mkdir -p hash-codes/build-nodejs-18
 
-          ubi_images_need_update=($(echo '${{ needs.poll_ubi_images.outputs.ubi_images_need_update }}' | jq -r '.[]'))
-          ubi_image_previous_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_previous_hash_codes }}' | jq -r '.[]'))
           ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
 
-          current_run_nodejs_18_sha256_image_hash_code=""
-          if echo "${ubi_images_need_update[@]}" | grep -qw "node-18-run"; then
-            for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
-              if [ "${ubi_image_current_hash_codes[i]}" == "node-18-run" ]; then
-                current_run_nodejs_18_sha256_image_hash_code=${ubi_image_current_hash_codes[i + 1]}
-              fi
-            done
-          else
-            for ((i = 0; i < ${#ubi_image_previous_hash_codes[@]}; i += 2)); do
-              if [ "${ubi_image_previous_hash_codes[i]}" == "node-18-run" ]; then
-                current_run_nodejs_18_sha256_image_hash_code=${ubi_image_previous_hash_codes[i + 1]}
-              fi
-            done
-          fi
-
-          echo $current_run_nodejs_18_sha256_image_hash_code > hash-codes/build-nodejs-18/run.oci.sha256
+          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
+            if [ "${ubi_image_current_hash_codes[i]}" == "node-18-run" ]; then
+              echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build-nodejs-18/run.oci.sha256
+            fi
+          done
 
       - name: Upload nodejs 18 run image hash code
         uses: actions/upload-artifact@v3
