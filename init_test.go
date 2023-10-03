@@ -15,10 +15,10 @@ import (
 )
 
 var stack struct {
-	BuildArchive string
-	RunArchive   string
-	BuildImageID string
-	RunImageID          string
+	BuildArchive       string
+	RunArchive         string
+	BuildImageID       string
+	RunImageID         string
 	RunNodejs16Archive string
 	RunNodejs18Archive string
 }

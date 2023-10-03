@@ -1,279 +1,499 @@
 name: Create Release
 
 on:
+  schedule:
+    - cron: "*/30 * * * *"  # every 30 minutes
   push:
     branches:
-    - main
+      - main
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version of the release to cut (e.g. 1.2.3). No leading v'
+        description: "Version of the release to cut (e.g. 1.2.3). No leading v"
         required: false
       force:
-        description: 'Release stack even if change validator does not detect changes, or a package is removed'
+        description: "Release stack even if change validator does not detect changes, or a package is removed"
         required: true
         type: choice
-        default: 'false'
+        default: "false"
         options:
-        - 'true'
-        - 'false'
+          - "true"
+          - "false"
 
 concurrency: release
+env:
+  UBI_BUILD_SHA256_FILENAME: build.oci.sha256
+  UBI_RUN_SHA256_FILENAME: run.oci.sha256
+  UBI_RUN_NODEJS_16_SHA256_FILENAME: run-nodejs-16.oci.sha256
+  UBI_RUN_NODEJS_18_SHA256_FILENAME: run-nodejs-18.oci.sha256
+
 jobs:
-  stack_files_changed:
-    name: Determine If Stack Files Changed
+  poll_ubi_images:
+    name: Poll UBI Images
     runs-on: ubuntu-22.04
     outputs:
-      stack_files_changed: ${{ steps.compare.outputs.stack_files_changed }}
-    steps:
-    - name: Checkout With History
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0  # gets full history
+      ubi_images_need_update: ${{ steps.compare_previous_and_current_sha256_hash_codes.outputs.ubi_images_need_update }}
+      ubi_image_previous_hash_codes: ${{ steps.compare_previous_and_current_sha256_hash_codes.outputs.ubi_image_previous_hash_codes }}
+      ubi_image_current_hash_codes: ${{ steps.compare_previous_and_current_sha256_hash_codes.outputs.ubi_image_current_hash_codes }}
 
-    - name: Compare With Previous Release
-      id: compare
-      run: |
-        # shellcheck disable=SC2046
-        changed="$(git diff --name-only $(git describe --tags --abbrev=0) -- stack)"
-        if [ -z "${changed}" ]
-        then
-          echo "No relevant files changed since previous release."
-          echo "stack_files_changed=false" >> "$GITHUB_OUTPUT"
-        else
-          echo "Relevant files have changed since previous release."
-          echo "${changed}"
-          echo "stack_files_changed=true" >> "$GITHUB_OUTPUT"
-        fi
-
-  run_if_stack_files_changed:
-    name: Run If Stack Files Changed
-    runs-on: ubuntu-22.04
-    needs: [stack_files_changed]
-    if: ${{ needs.stack_files_changed.outputs.stack_files_changed == 'true' }}
     steps:
-    - name: Run if stack files changed
-      run: |
-        echo "stack files have changed"
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Find and Download Previous build sha256 image hash code
+        id: fetch_previous_build_sha256_image_hash_code
+        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+        with:
+          asset_pattern: "${{ env.UBI_BUILD_SHA256_FILENAME }}"
+          search_depth: 1
+          repo: ${{ github.repository }}
+          output_path: "/github/workspace/${{ env.UBI_BUILD_SHA256_FILENAME }}"
+          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+      - name: Find and Download Previous run sha256 image hash code
+        id: fetch_previous_run_sha256_image_hash_code
+        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+        with:
+          asset_pattern: "${{ env.UBI_RUN_SHA256_FILENAME }}"
+          search_depth: 1
+          repo: ${{ github.repository }}
+          output_path: "/github/workspace/${{ env.UBI_RUN_SHA256_FILENAME }}"
+          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+      - name: Find and Download Previous run Node.js 16 sha256 image hash code
+        id: fetch_previous_run_nodejs_16_sha256_image_hash_code
+        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+        with:
+          asset_pattern: "${{ env.UBI_RUN_NODEJS_16_SHA256_FILENAME }}"
+          search_depth: 1
+          repo: ${{ github.repository }}
+          output_path: "/github/workspace/${{ env.UBI_RUN_NODEJS_16_SHA256_FILENAME }}"
+          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+      - name: Find and Download Previous run Node.js 18 sha256 image hash code
+        id: fetch_previous_run_nodejs_18_sha256_image_hash_code
+        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+        with:
+          asset_pattern: "${{ env.UBI_RUN_NODEJS_18_SHA256_FILENAME }}"
+          search_depth: 1
+          repo: ${{ github.repository }}
+          output_path: "/github/workspace/${{ env.UBI_RUN_NODEJS_18_SHA256_FILENAME }}"
+          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+      - name: Compare previous and current sha256 hash codes
+        id: compare_previous_and_current_sha256_hash_codes
+        run: |
+
+          ubi_images_need_update=()
+          ubi_image_current_hash_codes=()
+
+          # Build Image
+          current_build_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
+          previous_build_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_BUILD_SHA256_FILENAME }})
+          ubi_image_current_hash_codes+=("node-build" $current_build_sha256_image_hash_code)
+
+          if [ "$previous_build_sha256_image_hash_code" != "$current_build_sha256_image_hash_code" ]; then
+            ubi_images_need_update+=("node-build")
+          fi
+
+          # Run Image
+          current_run_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
+          previous_run_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_SHA256_FILENAME }})
+          ubi_image_current_hash_codes+=("node-run" $current_run_sha256_image_hash_code)
+
+          if [ "$previous_run_sha256_image_hash_code" != "$current_run_sha256_image_hash_code" ]; then
+            ubi_images_need_update+=("node-run")
+          fi
+
+          # Run Image Node.js 16
+          current_run_nodejs_16_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-16-minimal)
+          previous_run_nodejs_16_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_16_SHA256_FILENAME }})
+          ubi_image_current_hash_codes+=("node-16-run" $current_run_nodejs_16_sha256_image_hash_code)
+
+          if [ "$previous_run_nodejs_16_sha256_image_hash_code" != "$current_run_nodejs_16_sha256_image_hash_code" ]; then
+            ubi_images_need_update+=("node-16-run")
+          fi
+
+          # Run Image Node.js 18
+          current_run_nodejs_18_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-18-minimal)
+          previous_run_nodejs_18_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_18_SHA256_FILENAME }})
+          ubi_image_current_hash_codes+=("node-18-run" $current_run_nodejs_18_sha256_image_hash_code)
+
+          if [ "$previous_run_nodejs_18_sha256_image_hash_code" != "$current_run_nodejs_18_sha256_image_hash_code" ]; then
+            ubi_images_need_update+=("node-18-run")
+          fi
+
+          json_ubi_images_need_update=$(jq --compact-output --null-input '$ARGS.positional' --args -- "${ubi_images_need_update[@]}")
+          printf "ubi_images_need_update=%s\n" "${json_ubi_images_need_update}" >> "$GITHUB_OUTPUT"
+
+          json_ubi_image_current_hash_codes=$(jq --compact-output --null-input '$ARGS.positional' --args -- "${ubi_image_current_hash_codes[@]}")
+          printf "ubi_image_current_hash_codes=%s\n" "${json_ubi_image_current_hash_codes}" >> "$GITHUB_OUTPUT"
 
   create_stack:
     name: Create Stack
+    needs: poll_ubi_images
+    if: ${{ ! ( needs.poll_ubi_images.outputs.ubi_images_need_update == '[]' && github.event_name == 'schedule' ) }}
+
     runs-on: ubuntu-22.04
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
-    - name: Create stack
-      id: create-stack
-      uses: paketo-buildpacks/github-config/actions/stack/create-stack@main
+      - name: Create stack
+        id: create-stack
+        run: |
+          ./scripts/create.sh
 
-    - name: Upload build image
-      uses: actions/upload-artifact@v3
-      with:
-        name: current-build-image
-        path: build/build.oci
+      ## build image
+      - name: Upload build image
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-build-image
+          path: ./build/build.oci
 
-    - name: Upload base run image
-      uses: actions/upload-artifact@v3
-      with:
-        name: current-run-image
-        path: build/run.oci
+      - name: Get build image hash code
+        run: |
+          mkdir -p hash-codes/build
 
-    - name: Upload nodejs-16 run image
-      uses: actions/upload-artifact@v3
-      with:
-        name: current-nodejs-16-run-image
-        path: build-nodejs-16/run.oci
+          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
 
-    - name: Upload nodejs-18 run image
-      uses: actions/upload-artifact@v3
-      with:
-        name: current-nodejs-18-run-image
-        path: build-nodejs-18/run.oci
+            for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
+              if [ "${ubi_image_current_hash_codes[i]}" == "node-build" ]; then
+                echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build/build.oci.sha256
+              fi
+            done
+
+      - name: Upload build image hash code
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-build-image-hash-code
+          path: hash-codes/build/build.oci.sha256
+
+      ## run image
+      - name: Upload run image
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-run-image
+          path: ./build/run.oci
+
+      - name: Get run image hash code
+        run: |
+          mkdir -p hash-codes/build
+
+          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
+
+          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
+            if [ "${ubi_image_current_hash_codes[i]}" == "node-run" ]; then
+              echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build/run.oci.sha256
+            fi
+          done
+
+      - name: Upload run image hash code
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-run-image-hash-code
+          path: hash-codes/build/run.oci.sha256
+
+      ## nodejs 16 run image
+
+      - name: Upload nodejs 16 run image
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-nodejs-16-run-image
+          path: ./build-nodejs-16/run.oci
+
+      - name: Get nodejs 16 run image hash code
+        run: |
+          mkdir -p hash-codes/build-nodejs-16
+
+          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
+
+          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
+            if [ "${ubi_image_current_hash_codes[i]}" == "node-16-run" ]; then
+              echo ${ubi_image_current_hash_codes[i + 1]}> hash-codes/build-nodejs-16/run.oci.sha256
+            fi
+          done
+
+      - name: Upload nodejs 16 run image hash code
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-nodejs-16-run-image-hash-code
+          path: hash-codes/build-nodejs-16/run.oci.sha256
+
+      ## nodejs 18 run image
+      - name: Upload nodejs 18 run image
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-nodejs-18-run-image
+          path: ./build-nodejs-18/run.oci
+
+      - name: Get nodejs 18 run image hash code
+        run: |
+          mkdir -p hash-codes/build-nodejs-18
+
+          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
+
+          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
+            if [ "${ubi_image_current_hash_codes[i]}" == "node-18-run" ]; then
+              echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build-nodejs-18/run.oci.sha256
+            fi
+          done
+
+      - name: Upload nodejs 18 run image hash code
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-nodejs-18-run-image-hash-code
+          path: hash-codes/build-nodejs-18/run.oci.sha256
 
   test:
     name: Acceptance Test
-    needs: [ create_stack ]
+    needs: [create_stack]
     runs-on: ubuntu-22.04
     steps:
-    - name: Setup Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.20.x
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.20.x
 
-    - name: Checkout
-      uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
-    - name: Create OCI artifacts destination directory
-      run: |
-        mkdir -p build
+      - name: Create OCI artifacts destination directory
+        run: |
+          mkdir -p build
+          mkdir -p build-nodejs-16
+          mkdir -p build-nodejs-18
 
-    - name: Download Build Image
-      uses: actions/download-artifact@v3
-      with:
-        name: current-build-image
-        path: build
+      - name: Download Build Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-build-image
+          path: build
 
-    - name: Download Run Image
-      uses: actions/download-artifact@v3
-      with:
-        name: current-run-image
-        path: build
+      - name: Download Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-run-image
+          path: build
 
-    - name: Download nodejs-16 Run Image
-      uses: actions/download-artifact@v3
-      with:
-        name: current-nodejs-16-run-image
-        path: build-nodejs-16
+      - name: Download nodejs-16 Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-nodejs-16-run-image
+          path: build-nodejs-16
 
-    - name: Download nodejs-18 Run Image
-      uses: actions/download-artifact@v3
-      with:
-        name: current-nodejs-18-run-image
-        path: build-nodejs-18
+      - name: Download nodejs-18 Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-nodejs-18-run-image
+          path: build-nodejs-18
 
-    #- name: Run Acceptance Tests
-    #run: ./scripts/test.sh
+      - name: Run Acceptance Tests
+        run: scripts/test.sh
 
   force_release_creation:
     name: Force Release Creation
     runs-on: ubuntu-22.04
     if: ${{github.event.inputs.force == 'true'}}
     steps:
-    - name: Signal force release creation
-      run: |
-        echo "Force release creation input set to true"
+      - name: Signal force release creation
+        run: |
+          echo "Force release creation input set to true"
 
   release:
     name: Release
     runs-on: ubuntu-22.04
-    needs: [create_stack, run_if_stack_files_changed, test, force_release_creation ]
-    if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' || ( needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
+    needs: [create_stack, test, force_release_creation]
+    if: ${{ always() && needs.test.result == 'success' || needs.force_release_creation.result == 'success' }}
     steps:
-    - name: Print Release Reasoning
-      run: |
-        printf "Diff Packages: %s\n" "${{ needs.diff.result }}"
-        printf "Acceptance Tests: %s\n" "${{ needs.test.result }}"
-        printf "Run If Stack Files Changed: %s\n" "${{ needs.run_if_stack_files_changed.result }}"
-        printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
+      - name: Print Release Reasoning
+        run: |
+          printf "Acceptance Tests: %s\n" "${{ needs.test.result }}"
+          printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
 
-    - name: Checkout With History
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0  # gets full history
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # gets full history
 
-    - name: Download current build image
-      uses: actions/download-artifact@v3
-      with:
-        name: current-build-image
+      - name: Download Build Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-build-image
+          path: build
 
-    - name: Download current run image
-      uses: actions/download-artifact@v3
-      with:
-        name: current-run-image
+      - name: Download Build Image hash code
+        uses: actions/download-artifact@v3
+        with:
+          name: current-build-image-hash-code
+          path: build
 
-    - name: Download current nodejs-16 run image
-      uses: actions/download-artifact@v3
-      with:
-        name: current-nodejs-16-run-image
-        path: build-nodejs-16
+      - name: Download Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-run-image
+          path: build
 
-    - name: Download current nodejs-18 run image
-      uses: actions/download-artifact@v3
-      with:
-        name: current-nodejs-18-run-image
-        path: build-nodejs-18
+      - name: Download Run Image hash code
+        uses: actions/download-artifact@v3
+        with:
+          name: current-run-image-hash-code
+          path: build
 
-    - name: Increment Tag
-      if: github.event.inputs.version == ''
-      id: semver
-      uses: paketo-buildpacks/github-config/actions/tag/increment-tag@main
-      with:
-        allow_head_tagged: true
+      - name: Download nodejs-16 Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-nodejs-16-run-image
+          path: build-nodejs-16
 
-    - name: Set Release Tag
-      id: tag
-      run: |
-        tag="${{ github.event.inputs.version }}"
-        if [ -z "${tag}" ]; then
-          tag="${{ steps.semver.outputs.tag }}"
-        fi
-        echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+      - name: Download nodejs-16 Run Image hash code
+        uses: actions/download-artifact@v3
+        with:
+          name: current-nodejs-16-run-image-hash-code
+          path: build-nodejs-16
 
-    - name: Get Repository Name
-      id: repo_name
-      run: |
-        full=${{ github.repository }}
-        # Strip off the org and slash from repo name
-        # paketo-buildpacks/repo-name --> repo-name
-        repo=$(echo "${full}" | sed 's/^.*\///')
-        echo "github_repo_name=${repo}" >> "$GITHUB_OUTPUT"
+      - name: Download nodejs-18 Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-nodejs-18-run-image
+          path: build-nodejs-18
 
-        # Strip off 'stack' suffix from repo name
-        # some-name-stack --> some-name
-        registry_repo="${repo//-stack/}"
-        echo "registry_repo_name=${registry_repo}" >> "$GITHUB_OUTPUT"
+      - name: Download nodejs-18 Run Image hash code
+        uses: actions/download-artifact@v3
+        with:
+          name: current-nodejs-18-run-image-hash-code
+          path: build-nodejs-18
 
+      - name: Increment Tag
+        if: github.event.inputs.version == ''
+        id: semver
+        uses: paketo-buildpacks/github-config/actions/tag/increment-tag@main
+        with:
+          allow_head_tagged: true
 
-    - name: Setup Release Assets
-      id: assets
-      run: |
-        assets="$(jq --null-input --compact-output \
-          --arg tag "${{ steps.tag.outputs.tag }}" \
-          --arg repo "${{ steps.repo_name.outputs.github_repo_name }}" \
-          '[
-            {
-              "path": "build.oci",
-              "name": ($repo + "-" + $tag + "-" + "build.oci"),
-              "content_type": "application/gzip"
-            },
-            {
-              "path": "run.oci",
-              "name": ($repo + "-" + $tag + "-" + "run.oci"),
-              "content_type": "application/gzip"
-            },
-            {
-              "path": "build-nodejs-16/run.oci",
-              "name": ($repo + "-" + $tag + "-" + "run-nodejs-16.oci"),
-              "content_type": "application/gzip"
-            },
-            {
-              "path": "build-nodejs-18/run.oci",
-              "name": ($repo + "-" + $tag + "-" + "run-nodejs-18.oci"),
-              "content_type": "application/gzip"
-            }]')"
+      - name: Set Release Tag
+        id: tag
+        run: |
+          tag="${{ github.event.inputs.version }}"
+          if [ -z "${tag}" ]; then
+            tag="${{ steps.semver.outputs.tag }}"
+          fi
+          echo "tag=${tag}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
+      - name: Get Repository Name
+        id: repo_name
+        run: |
+          full=${{ github.repository }}
+          # Strip off the org and slash from repo name
+          # paketo-buildpacks/repo-name --> repo-name
+          repo=$(echo "${full}" | sed 's/^.*\///')
+          echo "github_repo_name=${repo}" >> "$GITHUB_OUTPUT"
 
-        printf "assets=%s\n" "${assets}" >> "$GITHUB_OUTPUT"
+          # Strip off 'stack' suffix from repo name
+          # some-name-stack --> some-name
+          registry_repo="${repo//-stack/}"
+          echo "registry_repo_name=${registry_repo}" >> "$GITHUB_OUTPUT"
 
-    - name: Create Release
-      uses: paketo-buildpacks/github-config/actions/release/create@main
-      with:
-        repo: ${{ github.repository }}
-        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-        tag_name: v${{ steps.tag.outputs.tag }}
-        target_commitish: ${{ github.sha }}
-        name: v${{ steps.tag.outputs.tag }}
-        body: ${{ steps.notes.outputs.release_body }}
-        draft: false
-        assets: ${{ steps.assets.outputs.assets }}
+      - name: Create Release Notes
+        id: notes
+        run: |
+          release_body="\#\# Images"
+          release_body+=" \<br \/\> "
+
+          release_body+="Build: paketocommunity/build${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
+          release_body+=" \<br \/\> "
+
+          release_body+="Run: paketocommunity/run-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
+          release_body+=" \<br \/\> "
+
+          release_body+="Run Node.js 16: paketocommunity/run-nodejs-16-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
+          release_body+=" \<br \/\> "
+
+          release_body+="Run Node.js 18: paketocommunity/run-nodejs-18-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
+          release_body+=" \<br \/\> "
+
+          echo "release_body=${release_body}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Release Assets
+        id: assets
+        run: |
+          assets="$(jq --null-input --compact-output \
+            --arg tag "${{ steps.tag.outputs.tag }}" \
+            --arg repo "${{ steps.repo_name.outputs.github_repo_name }}" \
+            '[
+              {
+                "path": "build-nodejs-16/run.oci",
+                "name": ($repo + "-" + $tag + "-" + "run-nodejs-16.oci"),
+                "content_type": "application/gzip"
+              },
+              {
+                "path": "build-nodejs-16/run.oci.sha256",
+                "name": ($repo + "-" + $tag + "-" + "run-nodejs-16.oci.sha256"),
+                "content_type": "application/gzip"
+              },
+              {
+                "path": "build-nodejs-18/run.oci",
+                "name": ($repo + "-" + $tag + "-" + "run-nodejs-18.oci"),
+                "content_type": "application/gzip"
+              },
+              {
+                "path": "build-nodejs-18/run.oci.sha256",
+                "name": ($repo + "-" + $tag + "-" + "run-nodejs-18.oci.sha256"),
+                "content_type": "application/gzip"
+              },
+              {
+                "path": "build/run.oci",
+                "name": ($repo + "-" + $tag + "-" + "run.oci"),
+                "content_type": "application/gzip"
+              },
+              {
+                "path": "build/run.oci.sha256",
+                "name": ($repo + "-" + $tag + "-" + "run.oci.sha256"),
+                "content_type": "application/gzip"
+              },
+              {
+                "path": "build/build.oci",
+                "name": ($repo + "-" + $tag + "-" + "build.oci"),
+                "content_type": "application/gzip"
+              },
+              {
+                "path": "build/build.oci.sha256",
+                "name": ($repo + "-" + $tag + "-" + "build.oci.sha256"),
+                "content_type": "application/gzip"
+              }]')"
+
+          printf "assets=%s\n" "${assets}"
+          printf "assets=%s\n" "${assets}" >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        uses: paketo-buildpacks/github-config/actions/release/create@main
+        with:
+          repo: ${{ github.repository }}
+          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+          tag_name: v${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: v${{ steps.tag.outputs.tag }}
+          body: ${{ steps.notes.outputs.release_body }}
+          draft: false
+          assets: ${{ steps.assets.outputs.assets }}
 
   failure:
     name: Alert on Failure
     runs-on: ubuntu-22.04
-    needs: [create_stack, test, release, stack_files_changed]
-    if: ${{ always() && needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' || needs.stack_files_changed.result == 'failure' }}
+    needs: [create_stack, test, release]
+    if: ${{ always() && needs.create_stack.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' }}
     steps:
-    - name: File Failure Alert Issue
-      uses: paketo-buildpacks/github-config/actions/issue/file@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        repo: ${{ github.repository }}
-        label: "failure:release"
-        comment_if_exists: true
-        issue_title: "Failure: Create Release workflow"
-        issue_body: |
-          Create Release workflow [failed](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}).
-          Please take a look to ensure CVE patches can be released. (cc @paketo-buildpacks/stacks-maintainers).
-        comment_body: |
-          Another failure occurred: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
+      - name: File Failure Alert Issue
+        uses: paketo-buildpacks/github-config/actions/issue/file@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repo: ${{ github.repository }}
+          label: "failure:release"
+          comment_if_exists: true
+          issue_title: "Failure: Create Release workflow"
+          issue_body: |
+            Create Release workflow [failed](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}).
+            Unable to update ubi images.
+          comment_body: |
+            Another failure occurred: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
