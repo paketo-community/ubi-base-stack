@@ -89,7 +89,13 @@ jobs:
 
           # Build Image
           current_build_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
-          previous_build_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_BUILD_SHA256_FILENAME }})
+
+          previous_build_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_BUILD_SHA256_FILENAME }}
+          previous_build_sha256_image_hash_code=""
+          if [ -f "$previous_build_sha256_image_hash_code_filepath" ]; then
+            previous_build_sha256_image_hash_code=$(cat $previous_build_sha256_image_hash_code_filepath)
+          fi
+
           ubi_image_current_hash_codes+=("node-build" $current_build_sha256_image_hash_code)
 
           if [ "$previous_build_sha256_image_hash_code" != "$current_build_sha256_image_hash_code" ]; then
@@ -98,7 +104,13 @@ jobs:
 
           # Run Image
           current_run_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
-          previous_run_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_SHA256_FILENAME }})
+
+          previous_run_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_RUN_SHA256_FILENAME }}
+          previous_run_sha256_image_hash_code=""
+          if [ -f "$previous_run_sha256_image_hash_code_filepath" ]; then
+            previous_run_sha256_image_hash_code=$(cat $previous_run_sha256_image_hash_code_filepath)
+          fi
+
           ubi_image_current_hash_codes+=("node-run" $current_run_sha256_image_hash_code)
 
           if [ "$previous_run_sha256_image_hash_code" != "$current_run_sha256_image_hash_code" ]; then
@@ -107,7 +119,13 @@ jobs:
 
           # Run Image Node.js 16
           current_run_nodejs_16_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-16-minimal)
-          previous_run_nodejs_16_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_16_SHA256_FILENAME }})
+
+          previous_run_nodejs_16_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_16_SHA256_FILENAME }}
+          previous_run_nodejs_16_sha256_image_hash_code=""
+          if [ -f "$previous_run_nodejs_16_sha256_image_hash_code_filepath" ]; then
+            previous_run_nodejs_16_sha256_image_hash_code=$(cat $previous_run_nodejs_16_sha256_image_hash_code_filepath)
+          fi
+
           ubi_image_current_hash_codes+=("node-16-run" $current_run_nodejs_16_sha256_image_hash_code)
 
           if [ "$previous_run_nodejs_16_sha256_image_hash_code" != "$current_run_nodejs_16_sha256_image_hash_code" ]; then
@@ -116,7 +134,13 @@ jobs:
 
           # Run Image Node.js 18
           current_run_nodejs_18_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-18-minimal)
-          previous_run_nodejs_18_sha256_image_hash_code=$(cat ${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_18_SHA256_FILENAME }})
+
+          previous_run_nodejs_18_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_18_SHA256_FILENAME }}
+          previous_run_nodejs_18_sha256_image_hash_code=""
+          if [ -f "$previous_run_nodejs_18_sha256_image_hash_code_filepath" ]; then
+              previous_run_nodejs_18_sha256_image_hash_code=$(cat $previous_run_nodejs_18_sha256_image_hash_code_filepath)
+          fi
+
           ubi_image_current_hash_codes+=("node-18-run" $current_run_nodejs_18_sha256_image_hash_code)
 
           if [ "$previous_run_nodejs_18_sha256_image_hash_code" != "$current_run_nodejs_18_sha256_image_hash_code" ]; then
