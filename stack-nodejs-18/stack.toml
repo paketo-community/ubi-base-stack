@@ -9,7 +9,7 @@ platforms = ["linux/amd64"]
   dockerfile = "../stack/build.Dockerfile"
   gid = 1000
   shell = "/bin/bash"
-  uid = 1001
+  uid = 1002
 
   [build.args]
 
@@ -18,6 +18,6 @@ platforms = ["linux/amd64"]
   dockerfile = "./run.Dockerfile"
   gid = 1000
   shell = "/bin/bash"
-  uid = 1002
+  uid = 1001
 
   [run.args]
