@@ -333,11 +333,11 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runReleaseDateJava8).NotTo(BeZero())
 
-			Expect(file.Config.User).To(Equal("1002:1000"))
+			Expect(file.Config.User).To(Equal("1001:1000"))
 
 			Expect(image).To(SatisfyAll(
 				HaveFileWithContent("/etc/group", ContainSubstring("cnb:x:1000:")),
-				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1002:1000::/home/cnb:/bin/bash")),
+				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1001:1000::/home/cnb:/bin/bash")),
 				HaveDirectory("/home/cnb"),
 			))
 
@@ -396,11 +396,11 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runReleaseDateJava11).NotTo(BeZero())
 
-			Expect(file.Config.User).To(Equal("1002:1000"))
+			Expect(file.Config.User).To(Equal("1001:1000"))
 
 			Expect(image).To(SatisfyAll(
 				HaveFileWithContent("/etc/group", ContainSubstring("cnb:x:1000:")),
-				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1002:1000::/home/cnb:/bin/bash")),
+				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1001:1000::/home/cnb:/bin/bash")),
 				HaveDirectory("/home/cnb"),
 			))
 
@@ -459,11 +459,11 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runReleaseDateJava17).NotTo(BeZero())
 
-			Expect(file.Config.User).To(Equal("1002:1000"))
+			Expect(file.Config.User).To(Equal("1001:1000"))
 
 			Expect(image).To(SatisfyAll(
 				HaveFileWithContent("/etc/group", ContainSubstring("cnb:x:1000:")),
-				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1002:1000::/home/cnb:/bin/bash")),
+				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1001:1000::/home/cnb:/bin/bash")),
 				HaveDirectory("/home/cnb"),
 			))
 
