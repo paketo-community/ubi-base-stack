@@ -400,7 +400,7 @@ jobs:
           path: hash-codes/build-java-11/run.oci.sha256
           
 
-      ## java 8 run image
+      ## java 17 run image
       - name: Upload java 17 run image
         uses: actions/upload-artifact@v3
         with:
