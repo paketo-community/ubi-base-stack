@@ -2,3 +2,6 @@
 build/
 build-nodejs-18/
 build-nodejs-16/
+build-java-8/
+build-java-11/
+build-java-17/

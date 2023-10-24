@@ -26,6 +26,9 @@ env:
   UBI_RUN_SHA256_FILENAME: run.oci.sha256
   UBI_RUN_NODEJS_16_SHA256_FILENAME: run-nodejs-16.oci.sha256
   UBI_RUN_NODEJS_18_SHA256_FILENAME: run-nodejs-18.oci.sha256
+  UBI_RUN_JAVA_8_SHA256_FILENAME: run-java-8.oci.sha256
+  UBI_RUN_JAVA_11_SHA256_FILENAME: run-java-11.oci.sha256
+  UBI_RUN_JAVA_17_SHA256_FILENAME: run-java-17.oci.sha256
 
 jobs:
   poll_ubi_images:
@@ -79,6 +82,36 @@ jobs:
           repo: ${{ github.repository }}
           output_path: "/github/workspace/${{ env.UBI_RUN_NODEJS_18_SHA256_FILENAME }}"
           token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+      - name: Find and Download Previous run Java 8 sha256 image hash code
+        id: fetch_previous_run_java_8_sha256_image_hash_code
+        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+        with:
+          asset_pattern: "${{ env.UBI_RUN_JAVA_8_SHA256_FILENAME }}"
+          search_depth: 1
+          repo: ${{ github.repository }}
+          output_path: "/github/workspace/${{ env.UBI_RUN_JAVA_8_SHA256_FILENAME }}"
+          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+      - name: Find and Download Previous run Java 11 sha256 image hash code
+        id: fetch_previous_run_java_11_sha256_image_hash_code
+        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+        with:
+          asset_pattern: "${{ env.UBI_RUN_JAVA_11_SHA256_FILENAME }}"
+          search_depth: 1
+          repo: ${{ github.repository }}
+          output_path: "/github/workspace/${{ env.UBI_RUN_JAVA_11_SHA256_FILENAME }}"
+          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}  
+
+      - name: Find and Download Previous run Java 17 sha256 image hash code
+        id: fetch_previous_run_java_17_sha256_image_hash_code
+        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+        with:
+          asset_pattern: "${{ env.UBI_RUN_JAVA_17_SHA256_FILENAME }}"
+          search_depth: 1
+          repo: ${{ github.repository }}
+          output_path: "/github/workspace/${{ env.UBI_RUN_JAVA_17_SHA256_FILENAME }}"
+          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}                                  
 
       - name: Compare previous and current sha256 hash codes
         id: compare_previous_and_current_sha256_hash_codes
@@ -147,6 +180,52 @@ jobs:
             ubi_images_need_update+=("node-18-run")
           fi
 
+          # Run Image Java 8
+          current_run_java_8_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/openjdk-8-runtime)
+
+          previous_run_java_8_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_RUN_JAVA_8_SHA256_FILENAME }}
+          previous_run_java_8_sha256_image_hash_code=""
+          if [ -f "$previous_run_java_8_sha256_image_hash_code_filepath" ]; then
+              previous_run_java_8_sha256_image_hash_code=$(cat $previous_run_java_8_sha256_image_hash_code_filepath)
+          fi
+
+          ubi_image_current_hash_codes+=("java-8-run" $current_run_java_8_sha256_image_hash_code)
+
+          if [ "$previous_run_java_8_sha256_image_hash_code" != "$current_run_java_8_sha256_image_hash_code" ]; then
+            ubi_images_need_update+=("java-8-run")
+          fi
+
+          # Run Image Java 11
+          current_run_java_11_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/openjdk-11-runtime)
+
+          previous_run_java_11_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_RUN_JAVA_11_SHA256_FILENAME }}
+          previous_run_java_11_sha256_image_hash_code=""
+          if [ -f "$previous_run_java_11_sha256_image_hash_code_filepath" ]; then
+              previous_run_java_11_sha256_image_hash_code=$(cat $previous_run_java_11_sha256_image_hash_code_filepath)
+          fi
+
+          ubi_image_current_hash_codes+=("java-11-run" $current_run_java_11_sha256_image_hash_code)
+
+          if [ "$previous_run_java_11_sha256_image_hash_code" != "$current_run_java_11_sha256_image_hash_code" ]; then
+            ubi_images_need_update+=("java-11-run")
+          fi
+          
+          # Run Image Java 17
+          current_run_java_17_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/openjdk-17-runtime)
+
+          previous_run_java_17_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_RUN_JAVA_17_SHA256_FILENAME }}
+          previous_run_java_17_sha256_image_hash_code=""
+          if [ -f "$previous_run_java_17_sha256_image_hash_code_filepath" ]; then
+              previous_run_java_17_sha256_image_hash_code=$(cat $previous_run_java_17_sha256_image_hash_code_filepath)
+          fi
+
+          ubi_image_current_hash_codes+=("java-17-run" $current_run_java_17_sha256_image_hash_code)
+
+          if [ "$previous_run_java_17_sha256_image_hash_code" != "$current_run_java_17_sha256_image_hash_code" ]; then
+            ubi_images_need_update+=("java-17-run")
+          fi          
+
+          # Print updates and hashcodes.
           json_ubi_images_need_update=$(jq --compact-output --null-input '$ARGS.positional' --args -- "${ubi_images_need_update[@]}")
           printf "ubi_images_need_update=%s\n" "${json_ubi_images_need_update}" >> "$GITHUB_OUTPUT"
 
@@ -219,7 +298,6 @@ jobs:
           path: hash-codes/build/run.oci.sha256
 
       ## nodejs 16 run image
-
       - name: Upload nodejs 16 run image
         uses: actions/upload-artifact@v3
         with:
@@ -269,6 +347,84 @@ jobs:
           name: current-nodejs-18-run-image-hash-code
           path: hash-codes/build-nodejs-18/run.oci.sha256
 
+
+      ## java 8 run image
+      - name: Upload java 8 run image
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-java-8-run-image
+          path: ./build-java-8/run.oci
+
+      - name: Get java 8 run image hash code
+        run: |
+          mkdir -p hash-codes/build-java-8
+
+          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
+
+          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
+            if [ "${ubi_image_current_hash_codes[i]}" == "java-8-run" ]; then
+              echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build-java-8/run.oci.sha256
+            fi
+          done
+
+      - name: Upload java 8 run image hash code
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-java-8-run-image-hash-code
+          path: hash-codes/build-java-8/run.oci.sha256    
+          
+
+      ## java 11 run image
+      - name: Upload java 11 run image
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-java-11-run-image
+          path: ./build-java-11/run.oci
+
+      - name: Get java 11 run image hash code
+        run: |
+          mkdir -p hash-codes/build-java-11
+
+          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
+
+          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
+            if [ "${ubi_image_current_hash_codes[i]}" == "java-11-run" ]; then
+              echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build-java-11/run.oci.sha256
+            fi
+          done
+
+      - name: Upload java 11 run image hash code
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-java-11-run-image-hash-code
+          path: hash-codes/build-java-11/run.oci.sha256
+          
+
+      ## java 8 run image
+      - name: Upload java 17 run image
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-java-17-run-image
+          path: ./build-java-17/run.oci
+
+      - name: Get java 17 run image hash code
+        run: |
+          mkdir -p hash-codes/build-java-17
+
+          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
+
+          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
+            if [ "${ubi_image_current_hash_codes[i]}" == "java-17-run" ]; then
+              echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build-java-17/run.oci.sha256
+            fi
+          done
+
+      - name: Upload java 17 run image hash code
+        uses: actions/upload-artifact@v3
+        with:
+          name: current-java-17-run-image-hash-code
+          path: hash-codes/build-java-17/run.oci.sha256          
+
   test:
     name: Acceptance Test
     needs: [create_stack]
@@ -287,6 +443,9 @@ jobs:
           mkdir -p build
           mkdir -p build-nodejs-16
           mkdir -p build-nodejs-18
+          mkdir -p build-java-8
+          mkdir -p build-java-11
+          mkdir -p build-java-17
 
       - name: Download Build Image
         uses: actions/download-artifact@v3
@@ -311,6 +470,24 @@ jobs:
         with:
           name: current-nodejs-18-run-image
           path: build-nodejs-18
+
+      - name: Download java-8 Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-java-8-run-image
+          path: build-java-8
+
+      - name: Download java-11 Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-java-11-run-image
+          path: build-java-11
+
+      - name: Download java-17 Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-java-17-run-image
+          path: build-java-17
 
       - name: Run Acceptance Tests
         run: scripts/test.sh
@@ -388,6 +565,42 @@ jobs:
           name: current-nodejs-18-run-image-hash-code
           path: build-nodejs-18
 
+      - name: Download java-8 Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-java-8-run-image
+          path: build-java-8
+
+      - name: Download java-8 Run Image hash code
+        uses: actions/download-artifact@v3
+        with:
+          name: current-java-8-run-image-hash-code
+          path: build-java-8
+
+      - name: Download java-11 Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-java-11-run-image
+          path: build-java-11
+
+      - name: Download java-11 Run Image hash code
+        uses: actions/download-artifact@v3
+        with:
+          name: current-java-11-run-image-hash-code
+          path: build-java-11
+
+      - name: Download java-17 Run Image
+        uses: actions/download-artifact@v3
+        with:
+          name: current-java-17-run-image
+          path: build-java-17
+
+      - name: Download java-17 Run Image hash code
+        uses: actions/download-artifact@v3
+        with:
+          name: current-java-17-run-image-hash-code
+          path: build-java-17
+
       - name: Increment Tag
         if: github.event.inputs.version == ''
         id: semver
@@ -437,6 +650,15 @@ jobs:
           release_body+="Run Node.js 18: paketocommunity/run-nodejs-18-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
           release_body+=" \<br \/\> "
 
+          release_body+="Run Java 8: paketocommunity/run-java-8-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
+          release_body+=" \<br \/\> "
+
+          release_body+="Run Java 11: paketocommunity/run-java-11-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
+          release_body+=" \<br \/\> "
+
+          release_body+="Run Java 17: paketocommunity/run-java-17-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
+          release_body+=" \<br \/\> "
+
           echo "release_body=${release_body}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Release Assets
@@ -446,6 +668,36 @@ jobs:
             --arg tag "${{ steps.tag.outputs.tag }}" \
             --arg repo "${{ steps.repo_name.outputs.github_repo_name }}" \
             '[
+              {
+                "path": "build-java-8/run.oci",
+                "name": ($repo + "-" + $tag + "-" + "run-java-8.oci"),
+                "content_type": "application/gzip"
+              },
+              {
+                "path": "build-java-8/run.oci.sha256",
+                "name": ($repo + "-" + $tag + "-" + "run-java-8.oci.sha256"),
+                "content_type": "application/gzip"
+              },
+              {
+                "path": "build-java-11/run.oci",
+                "name": ($repo + "-" + $tag + "-" + "run-java-11.oci"),
+                "content_type": "application/gzip"
+              },
+              {
+                "path": "build-java-11/run.oci.sha256",
+                "name": ($repo + "-" + $tag + "-" + "run-java-11.oci.sha256"),
+                "content_type": "application/gzip"
+              },
+              {
+                "path": "build-java-17/run.oci",
+                "name": ($repo + "-" + $tag + "-" + "run-java-17.oci"),
+                "content_type": "application/gzip"
+              },
+              {
+                "path": "build-java-17/run.oci.sha256",
+                "name": ($repo + "-" + $tag + "-" + "run-java-17.oci.sha256"),
+                "content_type": "application/gzip"
+              },                            
               {
                 "path": "build-nodejs-16/run.oci",
                 "name": ($repo + "-" + $tag + "-" + "run-nodejs-16.oci"),
