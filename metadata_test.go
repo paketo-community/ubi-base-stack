@@ -84,14 +84,14 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 
 			Expect(image).To(SatisfyAll(
 				HaveFileWithContent("/etc/group", ContainSubstring("cnb:x:1000:")),
-				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1001:1000::/home/cnb:/bin/bash")),
+				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1002:1000::/home/cnb:/bin/bash")),
 				HaveDirectory("/home/cnb"),
 			))
 
-			Expect(file.Config.User).To(Equal("1001:1000"))
+			Expect(file.Config.User).To(Equal("1002:1000"))
 
 			Expect(file.Config.Env).To(ContainElements(
-				"CNB_USER_ID=1001",
+				"CNB_USER_ID=1002",
 				"CNB_GROUP_ID=1000",
 				"CNB_STACK_ID=io.buildpacks.stacks.ubi8",
 			))
@@ -144,11 +144,11 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runReleaseDate).NotTo(BeZero())
 
-			Expect(file.Config.User).To(Equal("1002:1000"))
+			Expect(file.Config.User).To(Equal("1001:1000"))
 
 			Expect(image).To(SatisfyAll(
 				HaveFileWithContent("/etc/group", ContainSubstring("cnb:x:1000:")),
-				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1002:1000::/home/cnb:/bin/bash")),
+				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1001:1000::/home/cnb:/bin/bash")),
 				HaveDirectory("/home/cnb"),
 			))
 
@@ -207,11 +207,11 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runReleaseDateNodejs16).NotTo(BeZero())
 
-			Expect(file.Config.User).To(Equal("1002:1000"))
+			Expect(file.Config.User).To(Equal("1001:1000"))
 
 			Expect(image).To(SatisfyAll(
 				HaveFileWithContent("/etc/group", ContainSubstring("cnb:x:1000:")),
-				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1002:1000::/home/cnb:/bin/bash")),
+				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1001:1000::/home/cnb:/bin/bash")),
 				HaveDirectory("/home/cnb"),
 			))
 
@@ -270,11 +270,11 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runReleaseDateNodejs18).NotTo(BeZero())
 
-			Expect(file.Config.User).To(Equal("1002:1000"))
+			Expect(file.Config.User).To(Equal("1001:1000"))
 
 			Expect(image).To(SatisfyAll(
 				HaveFileWithContent("/etc/group", ContainSubstring("cnb:x:1000:")),
-				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1002:1000::/home/cnb:/bin/bash")),
+				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1001:1000::/home/cnb:/bin/bash")),
 				HaveDirectory("/home/cnb"),
 			))
 
