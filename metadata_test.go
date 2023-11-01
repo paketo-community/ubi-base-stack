@@ -291,7 +291,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(stack.RunNodejs16Archive)
+			archive, err := os.Open(stack.RunJava8Archive)
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -354,7 +354,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(stack.RunNodejs16Archive)
+			archive, err := os.Open(stack.RunJava11Archive)
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -417,7 +417,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(stack.RunNodejs16Archive)
+			archive, err := os.Open(stack.RunJava17Archive)
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 

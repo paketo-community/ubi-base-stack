@@ -56,7 +56,7 @@ function main() {
     rm -rf "${OUTPUT_DIR_JAVA17}"    
   fi
 
-  if ! [[ -f "${OUTPUT_DIR}/build.oci" ]] || ! [[ -f "${OUTPUT_DIR}/run.oci" ]] || ! [[ -f "${OUTPUT_DIR_NODEJS16}/run.oci" ]] || ! [[ -f "${OUTPUT_DIR_NODEJS18}/run.oci" ]]; then
+  if ! [[ -f "${OUTPUT_DIR}/build.oci" ]] || ! [[ -f "${OUTPUT_DIR}/run.oci" ]] || ! [[ -f "${OUTPUT_DIR_NODEJS16}/run.oci" ]] || ! [[ -f "${OUTPUT_DIR_NODEJS18}/run.oci" ]] || ! [[ -f "${OUTPUT_DIR_JAVA8}/run.oci" ]]  || ! [[ -f "${OUTPUT_DIR_JAVA11}/run.oci" ]]  || ! [[ -f "${OUTPUT_DIR_JAVA17}/run.oci" ]]; then
     util::print::title "Creating stack..."
     "${STACK_DIR}/scripts/create.sh"
   fi
