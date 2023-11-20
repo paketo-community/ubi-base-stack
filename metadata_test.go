@@ -13,6 +13,8 @@ import (
 	"github.com/sclevine/spec"
 
 	. "github.com/paketo-buildpacks/jam/integration/matchers"
+
+	. "github.com/paketo-buildpacks/occam/matchers"
 )
 
 func testMetadata(t *testing.T, context spec.G, it spec.S) {
@@ -72,7 +74,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.ubi8"),
 				HaveKeyWithValue("io.buildpacks.stack.description", "base build ubi8 image to support buildpacks"),
 				HaveKeyWithValue("io.buildpacks.stack.distro.name", "rhel"),
-				HaveKeyWithValue("io.buildpacks.stack.distro.version", "8.8"),
+				HaveKeyWithValue("io.buildpacks.stack.distro.version", MatchRegexp(`8\.\d+`)),
 				HaveKeyWithValue("io.buildpacks.stack.homepage", "https://github.com/paketo-community/ubi-base-stack"),
 				HaveKeyWithValue("io.buildpacks.stack.maintainer", "Paketo Community"),
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
@@ -134,7 +136,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.ubi8"),
 				HaveKeyWithValue("io.buildpacks.stack.description", "base run ubi8 image to support buildpacks"),
 				HaveKeyWithValue("io.buildpacks.stack.distro.name", "rhel"),
-				HaveKeyWithValue("io.buildpacks.stack.distro.version", "8.8"),
+				HaveKeyWithValue("io.buildpacks.stack.distro.version", MatchRegexp(`8\.\d+`)),
 				HaveKeyWithValue("io.buildpacks.stack.homepage", "https://github.com/paketo-community/ubi-base-stack"),
 				HaveKeyWithValue("io.buildpacks.stack.maintainer", "Paketo Community"),
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
@@ -153,7 +155,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			))
 
 			Expect(image).To(HaveFileWithContent("/etc/os-release", SatisfyAll(
-				ContainSubstring(`PRETTY_NAME="Red Hat Enterprise Linux 8.8 (Ootpa)"`),
+				ContainLines(MatchRegexp(`PRETTY_NAME=\"Red Hat Enterprise Linux 8\.\d+ \(Ootpa\)\"`)),
 				ContainSubstring(`HOME_URL="https://github.com/paketo-community/ubi-base-stack"`),
 				ContainSubstring(`SUPPORT_URL="https://github.com/paketo-community/ubi-base-stack/blob/main/README.md"`),
 				ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-community/ubi-base-stack/issues/new"`),
@@ -197,7 +199,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.ubi8"),
 				HaveKeyWithValue("io.buildpacks.stack.description", "ubi8 nodejs-16 image to support buildpacks"),
 				HaveKeyWithValue("io.buildpacks.stack.distro.name", "rhel"),
-				HaveKeyWithValue("io.buildpacks.stack.distro.version", "8.8"),
+				HaveKeyWithValue("io.buildpacks.stack.distro.version", MatchRegexp(`8\.\d+`)),
 				HaveKeyWithValue("io.buildpacks.stack.homepage", "https://github.com/paketo-community/ubi-base-stack"),
 				HaveKeyWithValue("io.buildpacks.stack.maintainer", "Paketo Community"),
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
@@ -216,7 +218,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			))
 
 			Expect(image).To(HaveFileWithContent("/etc/os-release", SatisfyAll(
-				ContainSubstring(`PRETTY_NAME="Red Hat Enterprise Linux 8.8 (Ootpa)"`),
+				ContainLines(MatchRegexp(`PRETTY_NAME=\"Red Hat Enterprise Linux 8\.\d+ \(Ootpa\)\"`)),
 				ContainSubstring(`HOME_URL="https://github.com/paketo-community/ubi-base-stack"`),
 				ContainSubstring(`SUPPORT_URL="https://github.com/paketo-community/ubi-base-stack/blob/main/README.md"`),
 				ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-community/ubi-base-stack/issues/new"`),
@@ -260,7 +262,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.ubi8"),
 				HaveKeyWithValue("io.buildpacks.stack.description", "ubi8 nodejs-18 image to support buildpacks"),
 				HaveKeyWithValue("io.buildpacks.stack.distro.name", "rhel"),
-				HaveKeyWithValue("io.buildpacks.stack.distro.version", "8.8"),
+				HaveKeyWithValue("io.buildpacks.stack.distro.version", MatchRegexp(`8\.\d+`)),
 				HaveKeyWithValue("io.buildpacks.stack.homepage", "https://github.com/paketo-community/ubi-base-stack"),
 				HaveKeyWithValue("io.buildpacks.stack.maintainer", "Paketo Community"),
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
@@ -279,7 +281,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			))
 
 			Expect(image).To(HaveFileWithContent("/etc/os-release", SatisfyAll(
-				ContainSubstring(`PRETTY_NAME="Red Hat Enterprise Linux 8.8 (Ootpa)"`),
+				ContainLines(MatchRegexp(`PRETTY_NAME=\"Red Hat Enterprise Linux 8\.\d+ \(Ootpa\)\"`)),
 				ContainSubstring(`HOME_URL="https://github.com/paketo-community/ubi-base-stack"`),
 				ContainSubstring(`SUPPORT_URL="https://github.com/paketo-community/ubi-base-stack/blob/main/README.md"`),
 				ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-community/ubi-base-stack/issues/new"`),
@@ -323,7 +325,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.ubi8"),
 				HaveKeyWithValue("io.buildpacks.stack.description", "ubi8 java-8 image to support buildpacks"),
 				HaveKeyWithValue("io.buildpacks.stack.distro.name", "rhel"),
-				HaveKeyWithValue("io.buildpacks.stack.distro.version", "8.8"),
+				HaveKeyWithValue("io.buildpacks.stack.distro.version", MatchRegexp(`8\.\d+`)),
 				HaveKeyWithValue("io.buildpacks.stack.homepage", "https://github.com/paketo-community/ubi-base-stack"),
 				HaveKeyWithValue("io.buildpacks.stack.maintainer", "Paketo Community"),
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
@@ -342,7 +344,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			))
 
 			Expect(image).To(HaveFileWithContent("/etc/os-release", SatisfyAll(
-				ContainSubstring(`PRETTY_NAME="Red Hat Enterprise Linux 8.8 (Ootpa)"`),
+				ContainLines(MatchRegexp(`PRETTY_NAME=\"Red Hat Enterprise Linux 8\.\d+ \(Ootpa\)\"`)),
 				ContainSubstring(`HOME_URL="https://github.com/paketo-community/ubi-base-stack"`),
 				ContainSubstring(`SUPPORT_URL="https://github.com/paketo-community/ubi-base-stack/blob/main/README.md"`),
 				ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-community/ubi-base-stack/issues/new"`),
@@ -386,7 +388,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.ubi8"),
 				HaveKeyWithValue("io.buildpacks.stack.description", "ubi8 java-11 image to support buildpacks"),
 				HaveKeyWithValue("io.buildpacks.stack.distro.name", "rhel"),
-				HaveKeyWithValue("io.buildpacks.stack.distro.version", "8.8"),
+				HaveKeyWithValue("io.buildpacks.stack.distro.version", MatchRegexp(`8\.\d+`)),
 				HaveKeyWithValue("io.buildpacks.stack.homepage", "https://github.com/paketo-community/ubi-base-stack"),
 				HaveKeyWithValue("io.buildpacks.stack.maintainer", "Paketo Community"),
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
@@ -405,7 +407,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			))
 
 			Expect(image).To(HaveFileWithContent("/etc/os-release", SatisfyAll(
-				ContainSubstring(`PRETTY_NAME="Red Hat Enterprise Linux 8.8 (Ootpa)"`),
+				ContainLines(MatchRegexp(`PRETTY_NAME=\"Red Hat Enterprise Linux 8\.\d+ \(Ootpa\)\"`)),
 				ContainSubstring(`HOME_URL="https://github.com/paketo-community/ubi-base-stack"`),
 				ContainSubstring(`SUPPORT_URL="https://github.com/paketo-community/ubi-base-stack/blob/main/README.md"`),
 				ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-community/ubi-base-stack/issues/new"`),
@@ -449,7 +451,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.ubi8"),
 				HaveKeyWithValue("io.buildpacks.stack.description", "ubi8 java-17 image to support buildpacks"),
 				HaveKeyWithValue("io.buildpacks.stack.distro.name", "rhel"),
-				HaveKeyWithValue("io.buildpacks.stack.distro.version", "8.8"),
+				HaveKeyWithValue("io.buildpacks.stack.distro.version", MatchRegexp(`8\.\d+`)),
 				HaveKeyWithValue("io.buildpacks.stack.homepage", "https://github.com/paketo-community/ubi-base-stack"),
 				HaveKeyWithValue("io.buildpacks.stack.maintainer", "Paketo Community"),
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
@@ -468,7 +470,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			))
 
 			Expect(image).To(HaveFileWithContent("/etc/os-release", SatisfyAll(
-				ContainSubstring(`PRETTY_NAME="Red Hat Enterprise Linux 8.8 (Ootpa)"`),
+				ContainLines(MatchRegexp(`PRETTY_NAME=\"Red Hat Enterprise Linux 8\.\d+ \(Ootpa\)\"`)),
 				ContainSubstring(`HOME_URL="https://github.com/paketo-community/ubi-base-stack"`),
 				ContainSubstring(`SUPPORT_URL="https://github.com/paketo-community/ubi-base-stack/blob/main/README.md"`),
 				ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-community/ubi-base-stack/issues/new"`),
