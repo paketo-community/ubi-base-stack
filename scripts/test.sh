@@ -8,6 +8,7 @@ readonly STACK_DIR="$(cd "${PROG_DIR}/.." && pwd)"
 readonly OUTPUT_DIR="${STACK_DIR}/build"
 readonly OUTPUT_DIR_NODEJS16="${STACK_DIR}/build-nodejs-16"
 readonly OUTPUT_DIR_NODEJS18="${STACK_DIR}/build-nodejs-18"
+readonly OUTPUT_DIR_NODEJS20="${STACK_DIR}/build-nodejs-20"
 readonly OUTPUT_DIR_JAVA8="${STACK_DIR}/build-java-8"
 readonly OUTPUT_DIR_JAVA11="${STACK_DIR}/build-java-11"
 readonly OUTPUT_DIR_JAVA17="${STACK_DIR}/build-java-17"
@@ -51,12 +52,20 @@ function main() {
     rm -rf "${OUTPUT_DIR}"
     rm -rf "${OUTPUT_DIR_NODEJS16}"
     rm -rf "${OUTPUT_DIR_NODEJS18}"
+    rm -rf "${OUTPUT_DIR_NODEJS20}"
     rm -rf "${OUTPUT_DIR_JAVA8}"
     rm -rf "${OUTPUT_DIR_JAVA11}"
     rm -rf "${OUTPUT_DIR_JAVA17}"    
   fi
 
-  if ! [[ -f "${OUTPUT_DIR}/build.oci" ]] || ! [[ -f "${OUTPUT_DIR}/run.oci" ]] || ! [[ -f "${OUTPUT_DIR_NODEJS16}/run.oci" ]] || ! [[ -f "${OUTPUT_DIR_NODEJS18}/run.oci" ]] || ! [[ -f "${OUTPUT_DIR_JAVA8}/run.oci" ]]  || ! [[ -f "${OUTPUT_DIR_JAVA11}/run.oci" ]]  || ! [[ -f "${OUTPUT_DIR_JAVA17}/run.oci" ]]; then
+  if ! [[ -f "${OUTPUT_DIR}/build.oci" ]] || \
+     ! [[ -f "${OUTPUT_DIR}/run.oci" ]] || \
+     ! [[ -f "${OUTPUT_DIR_NODEJS16}/run.oci" ]] || \
+     ! [[ -f "${OUTPUT_DIR_NODEJS18}/run.oci" ]] || \
+     ! [[ -f "${OUTPUT_DIR_NODEJS20}/run.oci" ]] || \
+     ! [[ -f "${OUTPUT_DIR_JAVA8}/run.oci" ]]  || \
+     ! [[ -f "${OUTPUT_DIR_JAVA11}/run.oci" ]]  || \
+     ! [[ -f "${OUTPUT_DIR_JAVA17}/run.oci" ]]; then
     util::print::title "Creating stack..."
     "${STACK_DIR}/scripts/create.sh"
   fi
@@ -76,6 +85,8 @@ and
 ${STACK_DIR}/build-nodejs-16/run.oci
 and
 ${STACK_DIR}/build-nodejs-18/run.oci
+and
+${STACK_DIR}/build-nodejs-20/run.oci
 and
 ${STACK_DIR}/build-java-8/run.oci
 and

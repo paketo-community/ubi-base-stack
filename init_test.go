@@ -21,6 +21,7 @@ var stack struct {
 	RunImageID         string
 	RunNodejs16Archive string
 	RunNodejs18Archive string
+	RunNodejs20Archive string
 	RunJava8Archive    string
 	RunJava11Archive   string
 	RunJava17Archive   string
@@ -43,6 +44,7 @@ func TestAcceptance(t *testing.T) {
 
 	stack.RunNodejs16Archive = filepath.Join(root, "build-nodejs-16", "run.oci")
 	stack.RunNodejs18Archive = filepath.Join(root, "build-nodejs-18", "run.oci")
+	stack.RunNodejs20Archive = filepath.Join(root, "build-nodejs-20", "run.oci")
 	stack.RunJava8Archive = filepath.Join(root, "build-java-8", "run.oci")
 	stack.RunJava11Archive = filepath.Join(root, "build-java-11", "run.oci")
 	stack.RunJava17Archive = filepath.Join(root, "build-java-17", "run.oci")

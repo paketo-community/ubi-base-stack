@@ -35,7 +35,10 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 	})
 
 	it("builds base stack", func() {
-		var buildReleaseDate, runReleaseDate, runReleaseDateNodejs16, runReleaseDateNodejs18, runReleaseDateJava8, runReleaseDateJava11, runReleaseDateJava17 time.Time
+		var (
+			buildReleaseDate time.Time
+			runReleaseDate   time.Time
+		)
 
 		by("confirming that the build image is correct", func() {
 			dir := filepath.Join(tmpDir, "build-index")
@@ -205,7 +208,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
 			))
 
-			runReleaseDateNodejs16, err = time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
+			runReleaseDateNodejs16, err := time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runReleaseDateNodejs16).NotTo(BeZero())
 
@@ -268,9 +271,72 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
 			))
 
-			runReleaseDateNodejs18, err = time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
+			runReleaseDateNodejs18, err := time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runReleaseDateNodejs18).NotTo(BeZero())
+
+			Expect(file.Config.User).To(Equal("1001:1000"))
+
+			Expect(image).To(SatisfyAll(
+				HaveFileWithContent("/etc/group", ContainSubstring("cnb:x:1000:")),
+				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1001:1000::/home/cnb:/bin/bash")),
+				HaveDirectory("/home/cnb"),
+			))
+
+			Expect(image).To(HaveFileWithContent("/etc/os-release", SatisfyAll(
+				ContainLines(MatchRegexp(`PRETTY_NAME=\"Red Hat Enterprise Linux 8\.\d+ \(Ootpa\)\"`)),
+				ContainSubstring(`HOME_URL="https://github.com/paketo-community/ubi-base-stack"`),
+				ContainSubstring(`SUPPORT_URL="https://github.com/paketo-community/ubi-base-stack/blob/main/README.md"`),
+				ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-community/ubi-base-stack/issues/new"`),
+			)))
+		})
+
+		by("confirming that the run nodejs-20 image is correct", func() {
+			dir := filepath.Join(tmpDir, "run-index-nodejs-20")
+			err := os.Mkdir(dir, os.ModePerm)
+			Expect(err).NotTo(HaveOccurred())
+
+			archive, err := os.Open(stack.RunNodejs20Archive)
+			Expect(err).NotTo(HaveOccurred())
+			defer archive.Close()
+
+			err = vacation.NewArchive(archive).Decompress(dir)
+			Expect(err).NotTo(HaveOccurred())
+
+			path, err := layout.FromPath(dir)
+			Expect(err).NotTo(HaveOccurred())
+
+			index, err := path.ImageIndex()
+			Expect(err).NotTo(HaveOccurred())
+
+			indexManifest, err := index.IndexManifest()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(indexManifest.Manifests).To(HaveLen(1))
+			Expect(indexManifest.Manifests[0].Platform).To(Equal(&v1.Platform{
+				OS:           "linux",
+				Architecture: "amd64",
+			}))
+
+			image, err := index.Image(indexManifest.Manifests[0].Digest)
+			Expect(err).NotTo(HaveOccurred())
+
+			file, err := image.ConfigFile()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(file.Config.Labels).To(SatisfyAll(
+				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.ubi8"),
+				HaveKeyWithValue("io.buildpacks.stack.description", "ubi8 nodejs-20 image to support buildpacks"),
+				HaveKeyWithValue("io.buildpacks.stack.distro.name", "rhel"),
+				HaveKeyWithValue("io.buildpacks.stack.distro.version", MatchRegexp(`8\.\d+`)),
+				HaveKeyWithValue("io.buildpacks.stack.homepage", "https://github.com/paketo-community/ubi-base-stack"),
+				HaveKeyWithValue("io.buildpacks.stack.maintainer", "Paketo Community"),
+				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
+			))
+
+			runReleaseDateNodejs20, err := time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
+			Expect(err).NotTo(HaveOccurred())
+			Expect(runReleaseDateNodejs20).NotTo(BeZero())
 
 			Expect(file.Config.User).To(Equal("1001:1000"))
 
@@ -331,7 +397,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
 			))
 
-			runReleaseDateJava8, err = time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
+			runReleaseDateJava8, err := time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runReleaseDateJava8).NotTo(BeZero())
 
@@ -394,7 +460,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
 			))
 
-			runReleaseDateJava11, err = time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
+			runReleaseDateJava11, err := time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runReleaseDateJava11).NotTo(BeZero())
 
@@ -457,7 +523,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
 			))
 
-			runReleaseDateJava17, err = time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
+			runReleaseDateJava17, err := time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runReleaseDateJava17).NotTo(BeZero())
 
