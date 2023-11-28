@@ -19,6 +19,7 @@ jobs:
         echo "run_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
         echo "run_nodejs_16_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-nodejs-16.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
         echo "run_nodejs_18_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-nodejs-18.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
+        echo "run_nodejs_20_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-nodejs-20.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
         echo "run_java_8_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-java-8.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
         echo "run_java_11_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-java-11.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
         echo "run_java_17_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-java-17.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
@@ -52,6 +53,13 @@ jobs:
       with:
         url: ${{ steps.event.outputs.run_nodejs_18_download_url }}
         output: "/github/workspace/run-nodejs-18.oci"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+    - name: Download nodejs-20 Run Image
+      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
+      with:
+        url: ${{ steps.event.outputs.run_nodejs_20_download_url }}
+        output: "/github/workspace/run-nodejs-20.oci"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
     - name: Download java-8 Run Image
@@ -118,6 +126,12 @@ jobs:
 
         sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-18.oci" "docker://gcr.io/${GCR_PROJECT}/run-nodejs-18-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
         sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-18.oci" "docker://gcr.io/${GCR_PROJECT}/run-nodejs-18-${{ steps.registry-repo.outputs.name }}:latest"
+
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-20.oci" "docker://${DOCKERHUB_ORG}/run-nodejs-20-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-20.oci" "docker://${DOCKERHUB_ORG}/run-nodejs-20-${{ steps.registry-repo.outputs.name }}:latest"
+
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-20.oci" "docker://gcr.io/${GCR_PROJECT}/run-nodejs-20-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-20.oci" "docker://gcr.io/${GCR_PROJECT}/run-nodejs-20-${{ steps.registry-repo.outputs.name }}:latest"
 
         sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-8.oci" "docker://${DOCKERHUB_ORG}/run-java-8-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
         sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-8.oci" "docker://${DOCKERHUB_ORG}/run-java-8-${{ steps.registry-repo.outputs.name }}:latest"
