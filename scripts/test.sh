@@ -121,7 +121,7 @@ function tests::run() {
 
   testout=$(mktemp)
   pushd "${STACK_DIR}" > /dev/null
-    if GOMAXPROCS="${GOMAXPROCS:-4}" go test -count=1 -timeout 0 ./... -v -run Acceptance | tee "${testout}"; then
+    if GOMAXPROCS="${GOMAXPROCS:-4}" go test -count=1 -timeout 0 ./integration/... -v -run Acceptance | tee "${testout}"; then
       util::tools::tests::checkfocus "${testout}"
       util::print::success "** GO Test Succeeded **"
     else

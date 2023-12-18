@@ -57,7 +57,7 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 			Execute("github.com/paketo-buildpacks/go-dist")
 		Expect(err).NotTo(HaveOccurred())
 
-		source, err = occam.Source(filepath.Join("integration", "testdata", "simple_app"))
+		source, err = occam.Source(filepath.Join("testdata", "simple_app"))
 		Expect(err).NotTo(HaveOccurred())
 
 		builderConfigFile, err := os.CreateTemp("", "builder.toml")

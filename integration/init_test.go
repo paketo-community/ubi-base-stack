@@ -37,10 +37,11 @@ func TestAcceptance(t *testing.T) {
 	root, err := filepath.Abs(".")
 	Expect(err).ToNot(HaveOccurred())
 
-	stack.BuildArchive = filepath.Join(root, "build", "build.oci")
+	stack.BuildArchive = filepath.Join(root, "../build", "build.oci")
+
 	stack.BuildImageID = fmt.Sprintf("stack-build-%s", uuid.NewString())
 
-	stack.RunArchive = filepath.Join(root, "build", "run.oci")
+	stack.RunArchive = filepath.Join(root, "../build", "run.oci")
 	stack.RunImageID = fmt.Sprintf("stack-run-%s", uuid.NewString())
 
 	stack.RunNodejs16Archive = filepath.Join(root, "build-nodejs-16", "run.oci")
