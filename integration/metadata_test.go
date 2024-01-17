@@ -12,8 +12,6 @@ import (
 	"github.com/paketo-buildpacks/packit/v2/vacation"
 	"github.com/sclevine/spec"
 
-	. "github.com/paketo-buildpacks/jam/integration/matchers"
-
 	. "github.com/paketo-buildpacks/occam/matchers"
 )
 
@@ -45,7 +43,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(stack.BuildArchive)
+			archive, err := os.Open(filepath.Join(root, "../build", "build.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -107,7 +105,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(stack.RunArchive)
+			archive, err := os.Open(filepath.Join(root, "../build", "run.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -170,7 +168,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(stack.RunNodejs16Archive)
+			archive, err := os.Open(filepath.Join(root, "../build-nodejs-16", "run.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -233,7 +231,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(stack.RunNodejs18Archive)
+			archive, err := os.Open(filepath.Join(root, "../build-nodejs-18", "run.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -296,7 +294,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(stack.RunNodejs20Archive)
+			archive, err := os.Open(filepath.Join(root, "../build-nodejs-20", "run.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -359,7 +357,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(stack.RunJava8Archive)
+			archive, err := os.Open(filepath.Join(root, "../build-java-8", "run.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -422,7 +420,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(stack.RunJava11Archive)
+			archive, err := os.Open(filepath.Join(root, "../build-java-11", "run.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -485,7 +483,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(stack.RunJava17Archive)
+			archive, err := os.Open(filepath.Join(root, "../build-java-17", "run.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
