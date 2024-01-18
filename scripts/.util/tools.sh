@@ -8,39 +8,37 @@ source "$(dirname "${BASH_SOURCE[0]}")/print.sh"
 
 function util::tools::os() {
   case "$(uname)" in
-  "Darwin")
-    echo "${1:-darwin}"
-    ;;
+    "Darwin")
+      echo "${1:-darwin}"
+      ;;
 
-  "Linux")
-    echo "linux"
-    ;;
+    "Linux")
+      echo "linux"
+      ;;
 
-  *)
-    util::print::error "Unknown OS \"$(uname)\""
-    exit 1
-    ;;
+    *)
+      util::print::error "Unknown OS \"$(uname)\""
+      exit 1
   esac
 }
 
 function util::tools::arch() {
   case "$(uname -m)" in
-  arm64 | aarch64)
-    echo "arm64"
-    ;;
+    arm64|aarch64)
+      echo "arm64"
+      ;;
 
-  amd64 | x86_64)
-    if [[ "${1:-}" == "--blank-amd64" ]]; then
-      echo ""
-    else
-      echo "amd64"
-    fi
-    ;;
+    amd64|x86_64)
+      if [[ "${1:-}" == "--blank-amd64" ]]; then
+        echo ""
+      else
+        echo "amd64"
+      fi
+      ;;
 
-  *)
-    util::print::error "Unknown Architecture \"$(uname -m)\""
-    exit 1
-    ;;
+    *)
+      util::print::error "Unknown Architecture \"$(uname -m)\""
+      exit 1
   esac
 }
 
@@ -60,19 +58,18 @@ function util::tools::jam::install() {
 
   while [[ "${#}" != 0 ]]; do
     case "${1}" in
-    --directory)
-      dir="${2}"
-      shift 2
-      ;;
+      --directory)
+        dir="${2}"
+        shift 2
+        ;;
 
-    --token)
-      token="${2}"
-      shift 2
-      ;;
+      --token)
+        token="${2}"
+        shift 2
+        ;;
 
-    *)
-      util::print::error "unknown argument \"${1}\""
-      ;;
+      *)
+        util::print::error "unknown argument \"${1}\""
     esac
   done
 
@@ -104,9 +101,9 @@ function util::tools::jam::install() {
       "${curl_args[@]}"
 
     chmod +x "${dir}/jam"
+  else
+    util::print::info "Using $("${dir}"/jam version)"
   fi
-
-  util::print::title "Using installed jam version $("${dir}"/jam version)"
 }
 
 function util::tools::pack::install() {
@@ -115,19 +112,18 @@ function util::tools::pack::install() {
 
   while [[ "${#}" != 0 ]]; do
     case "${1}" in
-    --directory)
-      dir="${2}"
-      shift 2
-      ;;
+      --directory)
+        dir="${2}"
+        shift 2
+        ;;
 
-    --token)
-      token="${2}"
-      shift 2
-      ;;
+      --token)
+        token="${2}"
+        shift 2
+        ;;
 
-    *)
-      util::print::error "unknown argument \"${1}\""
-      ;;
+      *)
+        util::print::error "unknown argument \"${1}\""
     esac
   done
 
@@ -163,42 +159,20 @@ function util::tools::pack::install() {
     chmod +x "${dir}/pack"
 
     rm "${tmp_location}"
+  else
+    util::print::info "Using pack $("${dir}"/pack version)"
   fi
-
-  util::print::title "Using installed pack version $("${dir}"/pack version)"
 }
 
-function util::tools::skopeo::check() {
-  if ! command -v skopeo &>/dev/null; then
-    util::print::error "skopeo could not be found. Please install skopeo before proceeding."
+function util::tools::skopeo::check () {
+  if ! command -v  skopeo &> /dev/null ; then
+      util::print::error "skopeo could not be found. Please install skopeo before proceeding."
   fi
 
   local version
   version="v$(skopeo -v | awk '{ print $3}')"
 
   util::print::title "Using installed skopeo version ${version}"
-}
-
-function util::tools::docker::check() {
-  if ! command -v docker &>/dev/null; then
-    util::print::error "docker could not be found. Please install docker before proceeding."
-  fi
-
-  local version
-  version="v$(docker -v | awk '{ print $3}')"
-
-  util::print::title "Using installed docker version ${version}"
-}
-
-function util::tools::git::check() {
-  if ! command -v git &>/dev/null; then
-    util::print::error "git could not be found. Please install git before proceeding."
-  fi
-
-  local version
-  version="v$(git -v | awk '{ print $3}')"
-
-  util::print::title "Using installed git version ${version}"
 }
 
 function util::tools::tests::checkfocus() {
