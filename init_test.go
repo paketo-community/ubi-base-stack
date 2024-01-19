@@ -44,14 +44,7 @@ var settings struct {
 
 var RegistryUrl string
 
-// func init() {
-// 	flag.StringVar(&LocalRegistryUrl, "registry-url", "", "")
-// }
-
 func by(_ string, f func()) { f() }
-
-//TODO how do we test the run.oci, because i dont know when it is applied.
-//TODO on java base stasck, there is no extension.toml
 
 func TestAcceptance(t *testing.T) {
 	var err error
