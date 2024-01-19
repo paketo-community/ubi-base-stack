@@ -74,11 +74,11 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 			buildImageID, runImageID, builderConfigFilepath, builder, err = generateBuilder(root)
 			Expect(err).NotTo(HaveOccurred())
 
-			source, err = occam.Source(filepath.Join("testdata", "nodejs_simple_app"))
+			source, err = occam.Source(filepath.Join("integration", "testdata", "nodejs_simple_app"))
 			Expect(err).NotTo(HaveOccurred())
 
-			//Creating and pushing the run image to local registry
-			runNodejs16Archive := filepath.Join(root, fmt.Sprintf("../build-nodejs-%d", nodeMajorVersion), "run.oci")
+			//Creating and pushing the run image to registry
+			runNodejs16Archive := filepath.Join(root, fmt.Sprintf("./build-nodejs-%d", nodeMajorVersion), "run.oci")
 			runNodejs16ImageID = fmt.Sprintf("run-nodejs-%d-%s", nodeMajorVersion, uuid.NewString())
 			Expect(err).NotTo(HaveOccurred())
 
@@ -92,8 +92,6 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 					settings.Extensions.UbiNodejsExtension.Online,
 				).
 				WithBuildpacks(
-					settings.Buildpacks.NodeEngine.Online,
-					settings.Buildpacks.NPMInstall.Online,
 					settings.Buildpacks.BuildPlan.Online,
 				).
 				WithBuilder(builder).
@@ -137,11 +135,11 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 			buildImageID, runImageID, builderConfigFilepath, builder, err = generateBuilder(root)
 			Expect(err).NotTo(HaveOccurred())
 
-			source, err = occam.Source(filepath.Join("testdata", "nodejs_simple_app"))
+			source, err = occam.Source(filepath.Join("integration", "testdata", "nodejs_simple_app"))
 			Expect(err).NotTo(HaveOccurred())
 
-			//Creating and pushing the run image to local registry
-			runNodejs18Archive := filepath.Join(root, fmt.Sprintf("../build-nodejs-%d", nodeMajorVersion), "run.oci")
+			//Creating and pushing the run image to registry
+			runNodejs18Archive := filepath.Join(root, fmt.Sprintf("./build-nodejs-%d", nodeMajorVersion), "run.oci")
 			runNodejs18ImageID = fmt.Sprintf("run-nodejs-%d-%s", nodeMajorVersion, uuid.NewString())
 			Expect(err).NotTo(HaveOccurred())
 
@@ -155,8 +153,6 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 					settings.Extensions.UbiNodejsExtension.Online,
 				).
 				WithBuildpacks(
-					settings.Buildpacks.NodeEngine.Online,
-					settings.Buildpacks.NPMInstall.Online,
 					settings.Buildpacks.BuildPlan.Online,
 				).
 				WithBuilder(builder).
@@ -200,11 +196,11 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 			buildImageID, runImageID, builderConfigFilepath, builder, err = generateBuilder(root)
 			Expect(err).NotTo(HaveOccurred())
 
-			source, err = occam.Source(filepath.Join("testdata", "nodejs_simple_app"))
+			source, err = occam.Source(filepath.Join("integration", "testdata", "nodejs_simple_app"))
 			Expect(err).NotTo(HaveOccurred())
 
-			//Creating and pushing the run image to local registry
-			runNodejs20Archive := filepath.Join(root, fmt.Sprintf("../build-nodejs-%d", nodeMajorVersion), "run.oci")
+			//Creating and pushing the run image to registry
+			runNodejs20Archive := filepath.Join(root, fmt.Sprintf("./build-nodejs-%d", nodeMajorVersion), "run.oci")
 			runNodejs20ImageID = fmt.Sprintf("run-nodejs-%d-%s", nodeMajorVersion, uuid.NewString())
 			Expect(err).NotTo(HaveOccurred())
 
@@ -218,8 +214,6 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 					settings.Extensions.UbiNodejsExtension.Online,
 				).
 				WithBuildpacks(
-					settings.Buildpacks.NodeEngine.Online,
-					settings.Buildpacks.NPMInstall.Online,
 					settings.Buildpacks.BuildPlan.Online,
 				).
 				WithBuilder(builder).
@@ -271,10 +265,10 @@ func createBuilder(config string, name string) (string, error) {
 	return buf.String(), err
 }
 
-func pushFileToLocalRegistry(filePath string, localRegistryUrl string, imageName string) (string, error) {
+func pushFileToLocalRegistry(filePath string, registryUrl string, imageName string) (string, error) {
 	buf := bytes.NewBuffer(nil)
 
-	var imageURL = fmt.Sprintf("%s/%s", localRegistryUrl, imageName)
+	var imageURL = fmt.Sprintf("%s/%s", registryUrl, imageName)
 
 	skopeo := pexec.NewExecutable("skopeo")
 
@@ -297,21 +291,21 @@ func pushFileToLocalRegistry(filePath string, localRegistryUrl string, imageName
 }
 
 func generateBuilder(root string) (BImageID string, RImageID string, BConfigFilepath string, builder string, err error) {
-	buildArchive := filepath.Join(root, "../build", "build.oci")
+	buildArchive := filepath.Join(root, "./build", "build.oci")
 	buildImageID := fmt.Sprintf("build-nodejs-%s", uuid.NewString())
-	buildImageURL, err := pushFileToLocalRegistry(buildArchive, LocalRegistryUrl, buildImageID)
+	buildImageURL, err := pushFileToLocalRegistry(buildArchive, RegistryUrl, buildImageID)
 	if err != nil {
 		return "", "", "", "", err
 	}
 
-	runArchive := filepath.Join(root, "../build", "run.oci")
+	runArchive := filepath.Join(root, "./build", "run.oci")
 	runImageID := fmt.Sprintf("run-nodejs-%s", uuid.NewString())
-	runImageURL, err := pushFileToLocalRegistry(runArchive, LocalRegistryUrl, runImageID)
+	runImageURL, err := pushFileToLocalRegistry(runArchive, RegistryUrl, runImageID)
 	if err != nil {
 		return "", "", "", "", err
 	}
 
-	//Pushing Builder's stack images
+	// Pushing Builder's stack images
 	err = archiveToDaemon(buildArchive, buildImageID)
 	if err != nil {
 		return "", "", "", "", err
@@ -322,7 +316,7 @@ func generateBuilder(root string) (BImageID string, RImageID string, BConfigFile
 		return "", "", "", "", err
 	}
 
-	//Creating builder file
+	// Creating builder file
 	builderConfigFile, err := os.CreateTemp("", "builder.toml")
 	if err != nil {
 		return "", "", "", "", err
@@ -341,8 +335,8 @@ func generateBuilder(root string) (BImageID string, RImageID string, BConfigFile
 		return "", "", "", "", err
 	}
 
-	//Pushing builder to local registry
-	builder = fmt.Sprintf("%s/builder-%s", LocalRegistryUrl, uuid.NewString())
+	// Pushing builder to local registry
+	builder = fmt.Sprintf("%s/builder-%s", RegistryUrl, uuid.NewString())
 	_, err = createBuilder(builderConfigFilepath, builder)
 	if err != nil {
 		return "", "", "", "", err
