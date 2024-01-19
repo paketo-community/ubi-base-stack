@@ -164,6 +164,62 @@ function util::tools::pack::install() {
   fi
 }
 
+function util::tools::syft::install() {
+  local dir token
+  token=""
+
+  while [[ "${#}" != 0 ]]; do
+    case "${1}" in
+      --directory)
+        dir="${2}"
+        shift 2
+        ;;
+
+      --token)
+        token="${2}"
+        shift 2
+        ;;
+
+      *)
+        util::print::error "unknown argument \"${1}\""
+    esac
+  done
+
+  mkdir -p "${dir}"
+  util::tools::path::export "${dir}"
+
+  if [[ ! -f "${dir}/syft" ]]; then
+    local version curl_args os arch
+
+    version="$(jq -r .syft "$(dirname "${BASH_SOURCE[0]}")/tools.json")"
+
+    tmp_location="/tmp/syft.tgz"
+    curl_args=(
+      "--fail"
+      "--silent"
+      "--location"
+      "--output" "${tmp_location}"
+    )
+
+    if [[ "${token}" != "" ]]; then
+      curl_args+=("--header" "Authorization: Token ${token}")
+    fi
+
+    util::print::title "Installing syft ${version}"
+
+    os=$(util::tools::os)
+    arch=$(util::tools::arch)
+
+    curl "https://github.com/anchore/syft/releases/download/${version}/syft_${version#v}_${os}_${arch}.tar.gz" \
+      "${curl_args[@]}"
+
+    tar xzf "${tmp_location}" -C "${dir}"
+    chmod +x "${dir}/syft"
+
+    rm "${tmp_location}"
+  fi
+}
+
 function util::tools::skopeo::check () {
   if ! command -v  skopeo &> /dev/null ; then
       util::print::error "skopeo could not be found. Please install skopeo before proceeding."
