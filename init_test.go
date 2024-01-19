@@ -74,47 +74,18 @@ func TestAcceptance(t *testing.T) {
 
 	buildpackStore := occam.NewBuildpackStore()
 
-	// settings.Extensions.UbiNodejsExtension.Online, err = buildpackStore.Get.
-	// 	Execute(settings.Config.UbiNodejsExtension)
-	// Expect(err).ToNot(HaveOccurred())
-
 	settings.Extensions.UbiNodejsExtension.Online, err = buildpackStore.Get.
-		WithVersion("0.0.1").
-		// Execute("github.com/paketo-community/ubi-nodejs-extension")
-		Execute("/home/costas/RedHat/buildpacks/ubi-nodejs-extension")
-	Expect(err).NotTo(HaveOccurred())
-
-	// settings.Buildpacks.NodeEngine.Online, err = buildpackStore.Get.
-	// 	Execute(settings.Config.NodeEngine)
-	// Expect(err).ToNot(HaveOccurred())
-
-	settings.Buildpacks.NodeEngine.Online, err = buildpackStore.Get.
-		WithVersion("0.0.1").
-		Execute("/home/costas/RedHat/buildpacks/node-engine")
-	Expect(err).NotTo(HaveOccurred())
-
-	// settings.Buildpacks.NPMInstall.Online, err = buildpackStore.Get.
-	// 	Execute(settings.Config.NPMInstall)
-	// Expect(err).ToNot(HaveOccurred())
-
-	settings.Buildpacks.NPMInstall.Online, err = buildpackStore.Get.
-		WithVersion("0.0.1").
-		Execute("/home/costas/RedHat/buildpacks/npm-install")
-	Expect(err).NotTo(HaveOccurred())
-
-	// settings.Buildpacks.BuildPlan.Online, err = buildpackStore.Get.
-	// 	Execute(settings.Config.BuildPlan)
-	// Expect(err).ToNot(HaveOccurred())
+		Execute(settings.Config.UbiNodejsExtension)
+	Expect(err).ToNot(HaveOccurred())
 
 	settings.Buildpacks.BuildPlan.Online, err = buildpackStore.Get.
-		WithVersion("0.0.1").
-		Execute("/home/costas/RedHat/buildpacks/build-plan")
-	Expect(err).NotTo(HaveOccurred())
+		Execute(settings.Config.BuildPlan)
+	Expect(err).ToNot(HaveOccurred())
 
 	SetDefaultEventuallyTimeout(30 * time.Second)
 
 	suite := spec.New("Acceptance", spec.Report(report.Terminal{}), spec.Parallel())
-	// suite("Metadata", testMetadata)
+	suite("Metadata", testMetadata)
 	suite("NodejsStackIntegration", testNodejsStackIntegration)
 	suite.Run(t)
 }

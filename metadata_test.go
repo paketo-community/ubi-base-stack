@@ -43,7 +43,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(filepath.Join(root, "../build", "build.oci"))
+			archive, err := os.Open(filepath.Join(root, "./build", "build.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -105,7 +105,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(filepath.Join(root, "../build", "run.oci"))
+			archive, err := os.Open(filepath.Join(root, "./build", "run.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -168,7 +168,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(filepath.Join(root, "../build-nodejs-16", "run.oci"))
+			archive, err := os.Open(filepath.Join(root, "./build-nodejs-16", "run.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -231,7 +231,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(filepath.Join(root, "../build-nodejs-18", "run.oci"))
+			archive, err := os.Open(filepath.Join(root, "./build-nodejs-18", "run.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -294,7 +294,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(filepath.Join(root, "../build-nodejs-20", "run.oci"))
+			archive, err := os.Open(filepath.Join(root, "./build-nodejs-20", "run.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -357,7 +357,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(filepath.Join(root, "../build-java-8", "run.oci"))
+			archive, err := os.Open(filepath.Join(root, "./build-java-8", "run.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -420,7 +420,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(filepath.Join(root, "../build-java-11", "run.oci"))
+			archive, err := os.Open(filepath.Join(root, "./build-java-11", "run.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -483,7 +483,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(filepath.Join(root, "../build-java-17", "run.oci"))
+			archive, err := os.Open(filepath.Join(root, "./build-java-17", "run.oci"))
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
