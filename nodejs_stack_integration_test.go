@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,6 +18,20 @@ import (
 	"github.com/paketo-buildpacks/packit/v2/pexec"
 )
 
+var nodeMajorVersions = []struct {
+	nodeMajorVersion int
+}{
+	{
+		nodeMajorVersion: 16,
+	},
+	{
+		nodeMajorVersion: 18,
+	},
+	{
+		nodeMajorVersion: 20,
+	},
+}
+
 func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 	var (
 		Expect     = NewWithT(t).Expect
@@ -24,215 +39,73 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 
 		err error
 
-		builderConfigFilepath string
-
-		pack   occam.Pack
-		docker occam.Docker
-		source string
-		name   string
-
-		image     occam.Image
+		pack      occam.Pack
+		docker    occam.Docker
 		container occam.Container
+
+		image                     occam.Image
+		name                      string
+		source                    string
+		bpNodeRunExtensionImageID string
 	)
 
 	it.Before(func() {
 		pack = occam.NewPack().WithVerbose()
 		docker = occam.NewDocker()
-
-		name, err = occam.RandomName()
-		Expect(err).NotTo(HaveOccurred())
 	})
 
-	it.After(func() {
-		Expect(docker.Container.Remove.Execute(container.ID)).To(Succeed())
-		Expect(docker.Image.Remove.Execute(image.ID)).To(Succeed())
-		Expect(docker.Volume.Remove.Execute(occam.CacheVolumeNames(name))).To(Succeed())
-		Expect(os.RemoveAll(builderConfigFilepath)).To(Succeed())
-	})
-
-	context("When using Node.js 16 as run image", func() {
-		var (
-			err                error
-			builder            string
-			buildImageID       string
-			runImageID         string
-			runNodejs16ImageID string
-			nodeMajorVersion   int
-		)
-
-		it.After(func() {
-			Expect(docker.Image.Remove.Execute(builder)).To(Succeed())
-			Expect(docker.Image.Remove.Execute(buildImageID)).To(Succeed())
-			Expect(docker.Image.Remove.Execute(runImageID)).To(Succeed())
-			Expect(docker.Image.Remove.Execute(runNodejs16ImageID)).To(Succeed())
-			Expect(os.RemoveAll(source)).To(Succeed())
-		})
+	context("When building an app", func() {
 
 		it.Before(func() {
-			nodeMajorVersion = 16
 
-			buildImageID, runImageID, builderConfigFilepath, builder, err = generateBuilder(root)
+			name, err = occam.RandomName()
 			Expect(err).NotTo(HaveOccurred())
 
 			source, err = occam.Source(filepath.Join("integration", "testdata", "nodejs_simple_app"))
 			Expect(err).NotTo(HaveOccurred())
-
-			//Creating and pushing the run image to registry
-			runNodejs16Archive := filepath.Join(root, fmt.Sprintf("./build-nodejs-%d", nodeMajorVersion), "run.oci")
-			runNodejs16ImageID = fmt.Sprintf("run-nodejs-%d-%s", nodeMajorVersion, uuid.NewString())
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(archiveToDaemon(runNodejs16Archive, runNodejs16ImageID)).To(Succeed())
 		})
-
-		it("sucessfully builds an app", func() {
-
-			image, _, err = pack.Build.
-				WithExtensions(
-					settings.Extensions.UbiNodejsExtension.Online,
-				).
-				WithBuildpacks(
-					settings.Buildpacks.BuildPlan.Online,
-				).
-				WithBuilder(builder).
-				WithNetwork("host").
-				WithEnv(map[string]string{"BP_NODE_RUN_EXTENSION": runNodejs16ImageID}).
-				WithPullPolicy("always").
-				Execute(name, source)
-			Expect(err).NotTo(HaveOccurred())
-
-			container, err = docker.Container.Run.
-				WithPublish("8080").
-				WithCommand("node server.js").
-				Execute(image.ID)
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(container).Should(Serve("Hello World!"))
-		})
-	})
-
-	context("When using Node.js 18 as run image", func() {
-		var (
-			err                error
-			builder            string
-			buildImageID       string
-			runImageID         string
-			runNodejs18ImageID string
-			nodeMajorVersion   int
-		)
 
 		it.After(func() {
-			Expect(docker.Image.Remove.Execute(builder)).To(Succeed())
-			Expect(docker.Image.Remove.Execute(buildImageID)).To(Succeed())
-			Expect(docker.Image.Remove.Execute(runImageID)).To(Succeed())
-			Expect(docker.Image.Remove.Execute(runNodejs18ImageID)).To(Succeed())
+			Expect(docker.Container.Remove.Execute(container.ID)).To(Succeed())
+			Expect(docker.Image.Remove.Execute(image.ID)).To(Succeed())
+			Expect(docker.Volume.Remove.Execute(occam.CacheVolumeNames(name))).To(Succeed())
 			Expect(os.RemoveAll(source)).To(Succeed())
+			Expect(docker.Image.Remove.Execute(bpNodeRunExtensionImageID)).To(Succeed())
 		})
 
-		it.Before(func() {
-			nodeMajorVersion = 18
+		for _, nmvs := range nodeMajorVersions {
+			nodeMajorVersion := nmvs.nodeMajorVersion
+			it(fmt.Sprintf("it successfully builds an app using Nodejs %d run image", nodeMajorVersion), func() {
 
-			buildImageID, runImageID, builderConfigFilepath, builder, err = generateBuilder(root)
-			Expect(err).NotTo(HaveOccurred())
+				//Creating and pushing the run image to registry
+				runNodejsArchive := filepath.Join(root, fmt.Sprintf("./build-nodejs-%d", nodeMajorVersion), "run.oci")
+				bpNodeRunExtensionImageID = fmt.Sprintf("run-nodejs-%d-%s", nodeMajorVersion, uuid.NewString())
+				Expect(archiveToDaemon(runNodejsArchive, bpNodeRunExtensionImageID)).To(Succeed())
 
-			source, err = occam.Source(filepath.Join("integration", "testdata", "nodejs_simple_app"))
-			Expect(err).NotTo(HaveOccurred())
+				image, _, err = pack.Build.
+					WithExtensions(
+						settings.Extensions.UbiNodejsExtension.Online,
+					).
+					WithBuildpacks(
+						settings.Buildpacks.BuildPlan.Online,
+					).
+					WithBuilder(builderImageID).
+					WithNetwork("host").
+					WithEnv(map[string]string{"BP_NODE_RUN_EXTENSION": bpNodeRunExtensionImageID}).
+					WithPullPolicy("always").
+					Execute(name, source)
+				Expect(err).NotTo(HaveOccurred())
 
-			//Creating and pushing the run image to registry
-			runNodejs18Archive := filepath.Join(root, fmt.Sprintf("./build-nodejs-%d", nodeMajorVersion), "run.oci")
-			runNodejs18ImageID = fmt.Sprintf("run-nodejs-%d-%s", nodeMajorVersion, uuid.NewString())
-			Expect(err).NotTo(HaveOccurred())
+				container, err = docker.Container.Run.
+					WithPublish("8080").
+					WithCommand("node server.js").
+					Execute(image.ID)
+				Expect(err).NotTo(HaveOccurred())
 
-			Expect(archiveToDaemon(runNodejs18Archive, runNodejs18ImageID)).To(Succeed())
-		})
-
-		it("sucessfully builds an app", func() {
-
-			image, _, err = pack.Build.
-				WithExtensions(
-					settings.Extensions.UbiNodejsExtension.Online,
-				).
-				WithBuildpacks(
-					settings.Buildpacks.BuildPlan.Online,
-				).
-				WithBuilder(builder).
-				WithNetwork("host").
-				WithEnv(map[string]string{"BP_NODE_RUN_EXTENSION": runNodejs18ImageID}).
-				WithPullPolicy("always").
-				Execute(name, source)
-			Expect(err).NotTo(HaveOccurred())
-
-			container, err = docker.Container.Run.
-				WithPublish("8080").
-				WithCommand("node server.js").
-				Execute(image.ID)
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(container).Should(Serve("Hello World!"))
-		})
+				Eventually(container).Should(Serve("Hello World!"))
+			})
+		}
 	})
-
-	context("When using Node.js 20 as run image", func() {
-		var (
-			err                error
-			builder            string
-			buildImageID       string
-			runImageID         string
-			runNodejs20ImageID string
-			nodeMajorVersion   int
-		)
-
-		it.After(func() {
-			Expect(docker.Image.Remove.Execute(builder)).To(Succeed())
-			Expect(docker.Image.Remove.Execute(buildImageID)).To(Succeed())
-			Expect(docker.Image.Remove.Execute(runImageID)).To(Succeed())
-			Expect(docker.Image.Remove.Execute(runNodejs20ImageID)).To(Succeed())
-			Expect(os.RemoveAll(source)).To(Succeed())
-		})
-
-		it.Before(func() {
-			nodeMajorVersion = 20
-
-			buildImageID, runImageID, builderConfigFilepath, builder, err = generateBuilder(root)
-			Expect(err).NotTo(HaveOccurred())
-
-			source, err = occam.Source(filepath.Join("integration", "testdata", "nodejs_simple_app"))
-			Expect(err).NotTo(HaveOccurred())
-
-			//Creating and pushing the run image to registry
-			runNodejs20Archive := filepath.Join(root, fmt.Sprintf("./build-nodejs-%d", nodeMajorVersion), "run.oci")
-			runNodejs20ImageID = fmt.Sprintf("run-nodejs-%d-%s", nodeMajorVersion, uuid.NewString())
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(archiveToDaemon(runNodejs20Archive, runNodejs20ImageID)).To(Succeed())
-		})
-
-		it("sucessfully builds an app", func() {
-
-			image, _, err = pack.Build.
-				WithExtensions(
-					settings.Extensions.UbiNodejsExtension.Online,
-				).
-				WithBuildpacks(
-					settings.Buildpacks.BuildPlan.Online,
-				).
-				WithBuilder(builder).
-				WithNetwork("host").
-				WithEnv(map[string]string{"BP_NODE_RUN_EXTENSION": runNodejs20ImageID}).
-				WithPullPolicy("always").
-				Execute(name, source)
-			Expect(err).NotTo(HaveOccurred())
-
-			container, err = docker.Container.Run.
-				WithPublish("8080").
-				WithCommand("node server.js").
-				Execute(image.ID)
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(container).Should(Serve("Hello World!"))
-		})
-	})
-
 }
 
 func archiveToDaemon(path, id string) error {
@@ -245,24 +118,6 @@ func archiveToDaemon(path, id string) error {
 			fmt.Sprintf("docker-daemon:%s:latest", id),
 		},
 	})
-}
-
-func createBuilder(config string, name string) (string, error) {
-	buf := bytes.NewBuffer(nil)
-
-	pack := pexec.NewExecutable("pack")
-	err := pack.Execute(pexec.Execution{
-		Stdout: buf,
-		Stderr: buf,
-		Args: []string{
-			"builder",
-			"create",
-			name,
-			fmt.Sprintf("--config=%s", config),
-			"--publish",
-		},
-	})
-	return buf.String(), err
 }
 
 func pushFileToLocalRegistry(filePath string, registryUrl string, imageName string) (string, error) {
@@ -290,7 +145,7 @@ func pushFileToLocalRegistry(filePath string, registryUrl string, imageName stri
 	}
 }
 
-func generateBuilder(root string) (BImageID string, RImageID string, BConfigFilepath string, builder string, err error) {
+func generateBuilder(root string) (BImageID string, RImageID string, BConfigFilepath string, builderImageID string, err error) {
 	buildArchive := filepath.Join(root, "./build", "build.oci")
 	buildImageID := fmt.Sprintf("build-nodejs-%s", uuid.NewString())
 	buildImageURL, err := pushFileToLocalRegistry(buildArchive, RegistryUrl, buildImageID)
@@ -335,12 +190,62 @@ func generateBuilder(root string) (BImageID string, RImageID string, BConfigFile
 		return "", "", "", "", err
 	}
 
-	// Pushing builder to local registry
-	builder = fmt.Sprintf("%s/builder-%s", RegistryUrl, uuid.NewString())
-	_, err = createBuilder(builderConfigFilepath, builder)
+	// naming builder and pushing it to registry with pack cli
+	builderImageID = fmt.Sprintf("%s/builder-%s", RegistryUrl, uuid.NewString())
+
+	buf := bytes.NewBuffer(nil)
+
+	pack := pexec.NewExecutable("pack")
+	err = pack.Execute(pexec.Execution{
+		Stdout: buf,
+		Stderr: buf,
+		Args: []string{
+			"builder",
+			"create",
+			builderImageID,
+			fmt.Sprintf("--config=%s", builderConfigFilepath),
+			"--publish",
+		},
+	})
+
 	if err != nil {
 		return "", "", "", "", err
 	}
 
-	return buildImageID, runImageID, builderConfigFilepath, builder, nil
+	return buildImageID, runImageID, builderConfigFilepath, builderImageID, nil
+}
+
+type Builder struct {
+	LocalInfo struct {
+		Lifecycle struct {
+			Version string `json:"version"`
+		} `json:"lifecycle"`
+	} `json:"local_info"`
+}
+
+func getLifecycleVersion(builderImageID string) (string, error) {
+	buf := bytes.NewBuffer(nil)
+	pack := pexec.NewExecutable("pack")
+	err := pack.Execute(pexec.Execution{
+		Stdout: buf,
+		Stderr: buf,
+		Args: []string{
+			"builder",
+			"inspect",
+			builderImageID,
+			"-o",
+			"json",
+		},
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	var builder Builder
+	err = json.Unmarshal([]byte(buf.String()), &builder)
+	if err != nil {
+		return "", err
+	}
+	return builder.LocalInfo.Lifecycle.Version, nil
 }

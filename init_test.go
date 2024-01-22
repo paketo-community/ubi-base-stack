@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,7 +15,15 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var root string
+var (
+	root                  string
+	buildImageID          string
+	runImageID            string
+	builderConfigFilepath string
+	builderImageID        string
+	RegistryUrl           string
+)
+
 var settings struct {
 	Buildpacks struct {
 		NodeEngine struct {
@@ -42,18 +51,15 @@ var settings struct {
 	}
 }
 
-var RegistryUrl string
-
 func by(_ string, f func()) { f() }
 
 func TestAcceptance(t *testing.T) {
 	var err error
-
 	Expect := NewWithT(t).Expect
 
-	// RegistryUrl := "localhost:5000"
+	docker := occam.NewDocker()
+
 	RegistryUrl = os.Getenv("REGISTRY_URL")
-	// flag.Parse()
 	Expect(RegistryUrl).NotTo(Equal(""))
 
 	root, err = filepath.Abs(".")
@@ -75,10 +81,65 @@ func TestAcceptance(t *testing.T) {
 		Execute(settings.Config.BuildPlan)
 	Expect(err).ToNot(HaveOccurred())
 
+	buildImageID, runImageID, builderConfigFilepath, builderImageID, err = generateBuilder(root)
+	Expect(err).NotTo(HaveOccurred())
+
 	SetDefaultEventuallyTimeout(30 * time.Second)
 
 	suite := spec.New("Acceptance", spec.Report(report.Terminal{}), spec.Parallel())
 	suite("Metadata", testMetadata)
 	suite("NodejsStackIntegration", testNodejsStackIntegration)
 	suite.Run(t)
+
+	/** Cleanup **/
+	err = removeLifecycleImage(docker, builderImageID)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = removeBuilderImages(docker, builderImageID, buildImageID, runImageID, builderConfigFilepath)
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func removeLifecycleImage(docker occam.Docker, builderImageID string) error {
+
+	lifecycleVersion, err := getLifecycleVersion(builderImageID)
+	if err != nil {
+		return err
+	}
+
+	err = docker.Image.Remove.Execute(fmt.Sprintf("buildpacksio/lifecycle:%s", lifecycleVersion))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Remove builder run image and build image
+func removeBuilderImages(docker occam.Docker, builderImageID string, buildImageID string, runImageID string, builderConfigFilepath string) error {
+
+	var err error
+
+	err = docker.Image.Remove.Execute(buildImageID)
+	if err != nil {
+		return err
+	}
+
+	err = docker.Image.Remove.Execute(runImageID)
+	if err != nil {
+		return err
+	}
+
+	err = docker.Image.Remove.Execute(fmt.Sprintf("%s/%s", RegistryUrl, runImageID))
+	if err != nil {
+		return err
+	}
+
+	err = docker.Image.Remove.Execute(builderImageID)
+	if err != nil {
+		return err
+	}
+
+	os.RemoveAll(builderConfigFilepath)
+
+	return nil
 }
