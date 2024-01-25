@@ -81,6 +81,14 @@ func TestAcceptance(t *testing.T) {
 		Execute(settings.Config.BuildPlan)
 	Expect(err).ToNot(HaveOccurred())
 
+	settings.Buildpacks.NodeEngine.Online, err = buildpackStore.Get.
+		Execute(settings.Config.NodeEngine)
+	Expect(err).ToNot(HaveOccurred())
+
+	settings.Buildpacks.NPMInstall.Online, err = buildpackStore.Get.
+		Execute(settings.Config.NPMInstall)
+	Expect(err).ToNot(HaveOccurred())
+
 	buildImageID, runImageID, builderConfigFilepath, builderImageID, err = generateBuilder(root)
 	Expect(err).NotTo(HaveOccurred())
 

@@ -87,6 +87,8 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 						settings.Extensions.UbiNodejsExtension.Online,
 					).
 					WithBuildpacks(
+						settings.Buildpacks.NodeEngine.Online,
+						settings.Buildpacks.NPMInstall.Online,
 						settings.Buildpacks.BuildPlan.Online,
 					).
 					WithBuilder(builderImageID).
@@ -98,7 +100,7 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 
 				container, err = docker.Container.Run.
 					WithPublish("8080").
-					WithCommand("node server.js").
+					WithCommand("npm start").
 					Execute(image.ID)
 				Expect(err).NotTo(HaveOccurred())
 
