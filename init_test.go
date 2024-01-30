@@ -100,54 +100,35 @@ func TestAcceptance(t *testing.T) {
 	suite.Run(t)
 
 	/** Cleanup **/
-	err = removeLifecycleImage(docker, builderImageID)
+	lifecycleImageID, err := getLifecycleImageID(docker, builderImageID)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = removeBuilderImages(docker, builderImageID, buildImageID, runImageID, builderConfigFilepath)
+	err = removeImages(docker, []string{buildImageID, runImageID, fmt.Sprintf("%s/%s", RegistryUrl, runImageID), builderImageID, lifecycleImageID})
 	Expect(err).NotTo(HaveOccurred())
+
+	os.RemoveAll(builderConfigFilepath)
 }
 
-func removeLifecycleImage(docker occam.Docker, builderImageID string) error {
+func getLifecycleImageID(docker occam.Docker, builderImageID string) (lifecycleImageID string, err error) {
 
 	lifecycleVersion, err := getLifecycleVersion(builderImageID)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	err = docker.Image.Remove.Execute(fmt.Sprintf("buildpacksio/lifecycle:%s", lifecycleVersion))
-	if err != nil {
-		return err
-	}
+	lifecycleImageID = fmt.Sprintf("buildpacksio/lifecycle:%s", lifecycleVersion)
 
-	return nil
+	return lifecycleImageID, nil
 }
 
-// Remove builder run image and build image
-func removeBuilderImages(docker occam.Docker, builderImageID string, buildImageID string, runImageID string, builderConfigFilepath string) error {
+func removeImages(docker occam.Docker, imageIDs []string) error {
 
-	var err error
-
-	err = docker.Image.Remove.Execute(buildImageID)
-	if err != nil {
-		return err
+	for _, imageID := range imageIDs {
+		err := docker.Image.Remove.Execute(imageID)
+		if err != nil {
+			return err
+		}
 	}
-
-	err = docker.Image.Remove.Execute(runImageID)
-	if err != nil {
-		return err
-	}
-
-	err = docker.Image.Remove.Execute(fmt.Sprintf("%s/%s", RegistryUrl, runImageID))
-	if err != nil {
-		return err
-	}
-
-	err = docker.Image.Remove.Execute(builderImageID)
-	if err != nil {
-		return err
-	}
-
-	os.RemoveAll(builderConfigFilepath)
 
 	return nil
 }

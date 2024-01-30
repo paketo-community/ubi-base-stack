@@ -43,10 +43,10 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 		docker    occam.Docker
 		container occam.Container
 
-		image                     occam.Image
-		name                      string
-		source                    string
-		bpNodeRunExtensionImageID string
+		image                        occam.Image
+		name                         string
+		source                       string
+		bpUbiRunImageOverrideImageID string
 	)
 
 	it.Before(func() {
@@ -70,7 +70,7 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 			Expect(docker.Image.Remove.Execute(image.ID)).To(Succeed())
 			Expect(docker.Volume.Remove.Execute(occam.CacheVolumeNames(name))).To(Succeed())
 			Expect(os.RemoveAll(source)).To(Succeed())
-			Expect(docker.Image.Remove.Execute(bpNodeRunExtensionImageID)).To(Succeed())
+			Expect(docker.Image.Remove.Execute(bpUbiRunImageOverrideImageID)).To(Succeed())
 		})
 
 		for _, nmvs := range nodeMajorVersions {
@@ -79,8 +79,8 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 
 				//Creating and pushing the run image to registry
 				runNodejsArchive := filepath.Join(root, fmt.Sprintf("./build-nodejs-%d", nodeMajorVersion), "run.oci")
-				bpNodeRunExtensionImageID = fmt.Sprintf("run-nodejs-%d-%s", nodeMajorVersion, uuid.NewString())
-				Expect(archiveToDaemon(runNodejsArchive, bpNodeRunExtensionImageID)).To(Succeed())
+				bpUbiRunImageOverrideImageID, err = pushFileToLocalRegistry(runNodejsArchive, RegistryUrl, fmt.Sprintf("run-nodejs-%d-%s", nodeMajorVersion, uuid.NewString()))
+				Expect(err).NotTo(HaveOccurred())
 
 				image, _, err = pack.Build.
 					WithExtensions(
@@ -93,7 +93,7 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 					).
 					WithBuilder(builderImageID).
 					WithNetwork("host").
-					WithEnv(map[string]string{"BP_NODE_RUN_EXTENSION": bpNodeRunExtensionImageID}).
+					WithEnv(map[string]string{"BP_UBI_RUN_IMAGE_OVERRIDE": bpUbiRunImageOverrideImageID}).
 					WithPullPolicy("always").
 					Execute(name, source)
 				Expect(err).NotTo(HaveOccurred())
