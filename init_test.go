@@ -16,12 +16,11 @@ import (
 )
 
 var (
-	root                  string
-	buildImageID          string
-	runImageID            string
-	builderConfigFilepath string
-	builderImageID        string
-	RegistryUrl           string
+	root           string
+	buildImageID   string
+	runImageID     string
+	builderImageID string
+	RegistryUrl    string
 )
 
 var settings struct {
@@ -33,6 +32,9 @@ var settings struct {
 			Online string
 		}
 		BuildPlan struct {
+			Online string
+		}
+		GoDist struct {
 			Online string
 		}
 	}
@@ -48,6 +50,7 @@ var settings struct {
 		UbiNodejsExtension string `json:"ubi-nodejs-extension"`
 		NodeEngine         string `json:"node-engine"`
 		NPMInstall         string `json:"npm-install"`
+		GoDist             string `json:"go-dist"`
 	}
 }
 
@@ -97,6 +100,7 @@ func TestAcceptance(t *testing.T) {
 	suite := spec.New("Acceptance", spec.Report(report.Terminal{}), spec.Parallel())
 	suite("Metadata", testMetadata)
 	suite("NodejsStackIntegration", testNodejsStackIntegration)
+	suite("buildpackIntegration", testBuildpackIntegration)
 	suite.Run(t)
 
 	/** Cleanup **/
@@ -105,8 +109,6 @@ func TestAcceptance(t *testing.T) {
 
 	err = removeImages(docker, []string{buildImageID, runImageID, fmt.Sprintf("%s/%s", RegistryUrl, runImageID), builderImageID, lifecycleImageID})
 	Expect(err).NotTo(HaveOccurred())
-
-	os.RemoveAll(builderConfigFilepath)
 }
 
 func getLifecycleImageID(docker occam.Docker, builderImageID string) (lifecycleImageID string, err error) {

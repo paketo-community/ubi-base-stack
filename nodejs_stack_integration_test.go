@@ -2,7 +2,6 @@ package acceptance_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,13 +38,14 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 
 		err error
 
-		pack      occam.Pack
-		docker    occam.Docker
+		pack   occam.Pack
+		docker occam.Docker
+		source string
+		name   string
+
+		image     occam.Image
 		container occam.Container
 
-		image                        occam.Image
-		name                         string
-		source                       string
 		bpUbiRunImageOverrideImageID string
 	)
 
@@ -110,18 +110,6 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 	})
 }
 
-func archiveToDaemon(path, id string) error {
-	skopeo := pexec.NewExecutable("skopeo")
-
-	return skopeo.Execute(pexec.Execution{
-		Args: []string{
-			"copy",
-			fmt.Sprintf("oci-archive:%s", path),
-			fmt.Sprintf("docker-daemon:%s:latest", id),
-		},
-	})
-}
-
 func pushFileToLocalRegistry(filePath string, registryUrl string, imageName string) (string, error) {
 	buf := bytes.NewBuffer(nil)
 
@@ -147,36 +135,35 @@ func pushFileToLocalRegistry(filePath string, registryUrl string, imageName stri
 	}
 }
 
-func generateBuilder(root string) (BImageID string, RImageID string, BConfigFilepath string, builderImageID string, err error) {
-	buildArchive := filepath.Join(root, "./build", "build.oci")
+func generateBuilder(stackPath string) (BImageID string, RImageID string, builderImageID string, err error) {
+	buildArchive := filepath.Join(stackPath, "build.oci")
 	buildImageID := fmt.Sprintf("build-nodejs-%s", uuid.NewString())
 	buildImageURL, err := pushFileToLocalRegistry(buildArchive, RegistryUrl, buildImageID)
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", err
 	}
 
-	runArchive := filepath.Join(root, "./build", "run.oci")
+	runArchive := filepath.Join(stackPath, "run.oci")
 	runImageID := fmt.Sprintf("run-nodejs-%s", uuid.NewString())
 	runImageURL, err := pushFileToLocalRegistry(runArchive, RegistryUrl, runImageID)
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", err
 	}
 
-	// Pushing Builder's stack images
 	err = archiveToDaemon(buildArchive, buildImageID)
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", err
 	}
 
 	err = archiveToDaemon(runArchive, runImageID)
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", err
 	}
 
 	// Creating builder file
 	builderConfigFile, err := os.CreateTemp("", "builder.toml")
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", err
 	}
 
 	builderConfigFilepath := builderConfigFile.Name()
@@ -189,7 +176,7 @@ func generateBuilder(root string) (BImageID string, RImageID string, BConfigFile
 			`, buildImageURL, runImageURL)
 
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", err
 	}
 
 	// naming builder and pushing it to registry with pack cli
@@ -211,43 +198,13 @@ func generateBuilder(root string) (BImageID string, RImageID string, BConfigFile
 	})
 
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", err
 	}
 
-	return buildImageID, runImageID, builderConfigFilepath, builderImageID, nil
-}
-
-type Builder struct {
-	LocalInfo struct {
-		Lifecycle struct {
-			Version string `json:"version"`
-		} `json:"lifecycle"`
-	} `json:"local_info"`
-}
-
-func getLifecycleVersion(builderImageID string) (string, error) {
-	buf := bytes.NewBuffer(nil)
-	pack := pexec.NewExecutable("pack")
-	err := pack.Execute(pexec.Execution{
-		Stdout: buf,
-		Stderr: buf,
-		Args: []string{
-			"builder",
-			"inspect",
-			builderImageID,
-			"-o",
-			"json",
-		},
-	})
-
+	err = os.RemoveAll(builderConfigFilepath)
 	if err != nil {
-		return "", err
+		return "", "", "", err
 	}
 
-	var builder Builder
-	err = json.Unmarshal([]byte(buf.String()), &builder)
-	if err != nil {
-		return "", err
-	}
-	return builder.LocalInfo.Lifecycle.Version, nil
+	return buildImageID, runImageID, builderImageID, nil
 }
