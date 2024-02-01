@@ -1,20 +1,18 @@
 package acceptance_test
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	utils "github.com/paketo-community/ubi-base-stack/utils"
 	"github.com/sclevine/spec"
 
 	. "github.com/onsi/gomega"
 
 	"github.com/paketo-buildpacks/occam"
 	. "github.com/paketo-buildpacks/occam/matchers"
-	"github.com/paketo-buildpacks/packit/v2/pexec"
 )
 
 func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
@@ -32,9 +30,10 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 		image     occam.Image
 		container occam.Container
 
-		buildImageID   string
-		runImageID     string
-		builderImageID string
+		buildImageID    string
+		runImageID      string
+		runImageUrl     string
+		builderImageUrl string
 	)
 
 	stackRelativePaths := []string{
@@ -55,9 +54,8 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 			Expect(docker.Container.Remove.Execute(container.ID)).To(Succeed())
 			Expect(docker.Image.Remove.Execute(image.ID)).To(Succeed())
 			Expect(docker.Volume.Remove.Execute(occam.CacheVolumeNames(name))).To(Succeed())
-			Expect(docker.Image.Remove.Execute(buildImageID)).To(Succeed())
-			Expect(docker.Image.Remove.Execute(runImageID)).To(Succeed())
-			Expect(docker.Image.Remove.Execute(builderImageID)).To(Succeed())
+			err = utils.RemoveImages(docker, []string{buildImageID, runImageID, runImageUrl, builderImageUrl})
+			Expect(err).NotTo(HaveOccurred())
 			Expect(os.RemoveAll(source)).To(Succeed())
 		})
 
@@ -67,14 +65,13 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 
 			source, err = occam.Source(filepath.Join("integration", "testdata", "simple_app"))
 			Expect(err).NotTo(HaveOccurred())
-
 		})
 
 		for _, srp := range stackRelativePaths {
 			currentStackRelativePath := srp
-			it(fmt.Sprintf("should be a success when using run image from stack %s", currentStackRelativePath), func() {
 
-				buildImageID, runImageID, builderImageID, err = generateBuilder(filepath.Join(root, currentStackRelativePath))
+			it(fmt.Sprintf("should be a success when using run image from stack %s", currentStackRelativePath), func() {
+				buildImageID, _, runImageID, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(filepath.Join(root, currentStackRelativePath), RegistryUrl)
 				Expect(err).NotTo(HaveOccurred())
 
 				image, _, err = pack.WithNoColor().Build.
@@ -86,7 +83,7 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 						"BP_LOG_LEVEL": "DEBUG",
 					}).
 					WithPullPolicy("if-not-present").
-					WithBuilder(builderImageID).
+					WithBuilder(builderImageUrl).
 					Execute(name, source)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -102,54 +99,8 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 
 				Eventually(container).Should(BeAvailable())
 				Eventually(container).Should(Serve(MatchRegexp(`go1.*`)).OnPort(8080))
+
 			})
 		}
-	})
-}
-
-type Builder struct {
-	LocalInfo struct {
-		Lifecycle struct {
-			Version string `json:"version"`
-		} `json:"lifecycle"`
-	} `json:"local_info"`
-}
-
-func getLifecycleVersion(builderID string) (string, error) {
-	buf := bytes.NewBuffer(nil)
-	pack := pexec.NewExecutable("pack")
-	err := pack.Execute(pexec.Execution{
-		Stdout: buf,
-		Stderr: buf,
-		Args: []string{
-			"builder",
-			"inspect",
-			builderID,
-			"-o",
-			"json",
-		},
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	var builder Builder
-	err = json.Unmarshal([]byte(buf.String()), &builder)
-	if err != nil {
-		return "", err
-	}
-	return builder.LocalInfo.Lifecycle.Version, nil
-}
-
-func archiveToDaemon(path, id string) error {
-	skopeo := pexec.NewExecutable("skopeo")
-
-	return skopeo.Execute(pexec.Execution{
-		Args: []string{
-			"copy",
-			fmt.Sprintf("oci-archive:%s", path),
-			fmt.Sprintf("docker-daemon:%s:latest", id),
-		},
 	})
 }

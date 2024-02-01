@@ -2,26 +2,29 @@ package acceptance_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/paketo-buildpacks/occam"
+	utils "github.com/paketo-community/ubi-base-stack/utils"
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
 
 	. "github.com/onsi/gomega"
 )
 
-var (
-	root           string
-	buildImageID   string
-	runImageID     string
-	builderImageID string
-	RegistryUrl    string
-)
+var root string
+var RegistryUrl string
+
+var builder struct {
+	imageUrl      string
+	buildImageID  string
+	buildImageUrl string
+	runImageID    string
+	runImageUrl   string
+}
 
 var settings struct {
 	Buildpacks struct {
@@ -84,6 +87,11 @@ func TestAcceptance(t *testing.T) {
 		Execute(settings.Config.BuildPlan)
 	Expect(err).ToNot(HaveOccurred())
 
+
+	settings.Buildpacks.GoDist.Online, err = buildpackStore.Get.
+		Execute(settings.Config.GoDist)
+	Expect(err).NotTo(HaveOccurred())
+
 	settings.Buildpacks.NodeEngine.Online, err = buildpackStore.Get.
 		Execute(settings.Config.NodeEngine)
 	Expect(err).ToNot(HaveOccurred())
@@ -92,7 +100,7 @@ func TestAcceptance(t *testing.T) {
 		Execute(settings.Config.NPMInstall)
 	Expect(err).ToNot(HaveOccurred())
 
-	buildImageID, runImageID, builderConfigFilepath, builderImageID, err = generateBuilder(root)
+	builder.buildImageID, builder.buildImageUrl, builder.runImageID, builder.runImageUrl, builder.imageUrl, err = utils.GenerateBuilder(filepath.Join(root, "build"), RegistryUrl)
 	Expect(err).NotTo(HaveOccurred())
 
 	SetDefaultEventuallyTimeout(30 * time.Second)
@@ -104,33 +112,10 @@ func TestAcceptance(t *testing.T) {
 	suite.Run(t)
 
 	/** Cleanup **/
-	lifecycleImageID, err := getLifecycleImageID(docker, builderImageID)
+	lifecycleImageID, err := utils.GetLifecycleImageID(docker, builder.imageUrl)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = removeImages(docker, []string{buildImageID, runImageID, fmt.Sprintf("%s/%s", RegistryUrl, runImageID), builderImageID, lifecycleImageID})
+	err = utils.RemoveImages(docker, []string{builder.buildImageID, builder.runImageID, lifecycleImageID, builder.runImageUrl, builder.imageUrl})
 	Expect(err).NotTo(HaveOccurred())
-}
 
-func getLifecycleImageID(docker occam.Docker, builderImageID string) (lifecycleImageID string, err error) {
-
-	lifecycleVersion, err := getLifecycleVersion(builderImageID)
-	if err != nil {
-		return "", err
-	}
-
-	lifecycleImageID = fmt.Sprintf("buildpacksio/lifecycle:%s", lifecycleVersion)
-
-	return lifecycleImageID, nil
-}
-
-func removeImages(docker occam.Docker, imageIDs []string) error {
-
-	for _, imageID := range imageIDs {
-		err := docker.Image.Remove.Execute(imageID)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }

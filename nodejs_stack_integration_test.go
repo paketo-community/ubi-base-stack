@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,7 +13,7 @@ import (
 
 	"github.com/paketo-buildpacks/occam"
 	. "github.com/paketo-buildpacks/occam/matchers"
-	"github.com/paketo-buildpacks/packit/v2/pexec"
+	utils "github.com/paketo-community/ubi-base-stack/utils"
 )
 
 var nodeMajorVersions = []struct {
@@ -79,7 +78,7 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 
 				//Creating and pushing the run image to registry
 				runNodejsArchive := filepath.Join(root, fmt.Sprintf("./build-nodejs-%d", nodeMajorVersion), "run.oci")
-				bpUbiRunImageOverrideImageID, err = pushFileToLocalRegistry(runNodejsArchive, RegistryUrl, fmt.Sprintf("run-nodejs-%d-%s", nodeMajorVersion, uuid.NewString()))
+				bpUbiRunImageOverrideImageID, err = utils.PushFileToLocalRegistry(runNodejsArchive, RegistryUrl, fmt.Sprintf("run-nodejs-%d-%s", nodeMajorVersion, uuid.NewString()))
 				Expect(err).NotTo(HaveOccurred())
 
 				image, _, err = pack.Build.
@@ -91,7 +90,7 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 						settings.Buildpacks.NPMInstall.Online,
 						settings.Buildpacks.BuildPlan.Online,
 					).
-					WithBuilder(builderImageID).
+					WithBuilder(builder.imageUrl).
 					WithNetwork("host").
 					WithEnv(map[string]string{"BP_UBI_RUN_IMAGE_OVERRIDE": bpUbiRunImageOverrideImageID}).
 					WithPullPolicy("always").
@@ -108,103 +107,4 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 			})
 		}
 	})
-}
-
-func pushFileToLocalRegistry(filePath string, registryUrl string, imageName string) (string, error) {
-	buf := bytes.NewBuffer(nil)
-
-	var imageURL = fmt.Sprintf("%s/%s", registryUrl, imageName)
-
-	skopeo := pexec.NewExecutable("skopeo")
-
-	err := skopeo.Execute(pexec.Execution{
-		Stdout: buf,
-		Stderr: buf,
-		Args: []string{
-			"copy",
-			fmt.Sprintf("oci-archive:%s", filePath),
-			fmt.Sprintf("docker://%s:latest", imageURL),
-			"--dest-tls-verify=false",
-		},
-	})
-
-	if err != nil {
-		return buf.String(), err
-	} else {
-		return imageURL, nil
-	}
-}
-
-func generateBuilder(stackPath string) (BImageID string, RImageID string, builderImageID string, err error) {
-	buildArchive := filepath.Join(stackPath, "build.oci")
-	buildImageID := fmt.Sprintf("build-nodejs-%s", uuid.NewString())
-	buildImageURL, err := pushFileToLocalRegistry(buildArchive, RegistryUrl, buildImageID)
-	if err != nil {
-		return "", "", "", err
-	}
-
-	runArchive := filepath.Join(stackPath, "run.oci")
-	runImageID := fmt.Sprintf("run-nodejs-%s", uuid.NewString())
-	runImageURL, err := pushFileToLocalRegistry(runArchive, RegistryUrl, runImageID)
-	if err != nil {
-		return "", "", "", err
-	}
-
-	err = archiveToDaemon(buildArchive, buildImageID)
-	if err != nil {
-		return "", "", "", err
-	}
-
-	err = archiveToDaemon(runArchive, runImageID)
-	if err != nil {
-		return "", "", "", err
-	}
-
-	// Creating builder file
-	builderConfigFile, err := os.CreateTemp("", "builder.toml")
-	if err != nil {
-		return "", "", "", err
-	}
-
-	builderConfigFilepath := builderConfigFile.Name()
-
-	_, err = fmt.Fprintf(builderConfigFile, `
-			[stack]
-			  id = "io.buildpacks.stacks.ubi8"
-			  build-image = "%s:latest"
-			  run-image = "%s:latest"
-			`, buildImageURL, runImageURL)
-
-	if err != nil {
-		return "", "", "", err
-	}
-
-	// naming builder and pushing it to registry with pack cli
-	builderImageID = fmt.Sprintf("%s/builder-%s", RegistryUrl, uuid.NewString())
-
-	buf := bytes.NewBuffer(nil)
-
-	pack := pexec.NewExecutable("pack")
-	err = pack.Execute(pexec.Execution{
-		Stdout: buf,
-		Stderr: buf,
-		Args: []string{
-			"builder",
-			"create",
-			builderImageID,
-			fmt.Sprintf("--config=%s", builderConfigFilepath),
-			"--publish",
-		},
-	})
-
-	if err != nil {
-		return "", "", "", err
-	}
-
-	err = os.RemoveAll(builderConfigFilepath)
-	if err != nil {
-		return "", "", "", err
-	}
-
-	return buildImageID, runImageID, builderImageID, nil
 }
