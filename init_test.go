@@ -28,10 +28,7 @@ var builder struct {
 
 var settings struct {
 	Buildpacks struct {
-		NodeEngine struct {
-			Online string
-		}
-		NPMInstall struct {
+		Nodejs struct {
 			Online string
 		}
 		BuildPlan struct {
@@ -51,8 +48,7 @@ var settings struct {
 	Config struct {
 		BuildPlan          string `json:"build-plan"`
 		UbiNodejsExtension string `json:"ubi-nodejs-extension"`
-		NodeEngine         string `json:"node-engine"`
-		NPMInstall         string `json:"npm-install"`
+		Nodejs             string `json:"nodejs"`
 		GoDist             string `json:"go-dist"`
 		NodeMajorVersions  []int  `json:"nodejs-major-versions"`
 	}
@@ -85,6 +81,12 @@ func TestAcceptance(t *testing.T) {
 		Execute(settings.Config.UbiNodejsExtension)
 	Expect(err).ToNot(HaveOccurred())
 
+
+	settings.Buildpacks.Nodejs.Online, err = buildpackStore.Get.
+		Execute(settings.Config.Nodejs)
+	Expect(err).ToNot(HaveOccurred())
+
+
 	settings.Buildpacks.BuildPlan.Online, err = buildpackStore.Get.
 		Execute(settings.Config.BuildPlan)
 	Expect(err).ToNot(HaveOccurred())
@@ -93,14 +95,6 @@ func TestAcceptance(t *testing.T) {
 	settings.Buildpacks.GoDist.Online, err = buildpackStore.Get.
 		Execute(settings.Config.GoDist)
 	Expect(err).NotTo(HaveOccurred())
-
-	settings.Buildpacks.NodeEngine.Online, err = buildpackStore.Get.
-		Execute(settings.Config.NodeEngine)
-	Expect(err).ToNot(HaveOccurred())
-
-	settings.Buildpacks.NPMInstall.Online, err = buildpackStore.Get.
-		Execute(settings.Config.NPMInstall)
-	Expect(err).ToNot(HaveOccurred())
 
 	builder.buildImageID, builder.buildImageUrl, builder.runImageID, builder.runImageUrl, builder.imageUrl, err = utils.GenerateBuilder(filepath.Join(root, "build"), RegistryUrl)
 	Expect(err).NotTo(HaveOccurred())

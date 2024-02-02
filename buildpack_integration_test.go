@@ -44,8 +44,6 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 		stackRelativePaths = append(stackRelativePaths, fmt.Sprintf("build-nodejs-%d", nodeMajorVersion))
 	}
 
-	fmt.Println(stackRelativePaths)
-
 	it.Before(func() {
 		pack = occam.NewPack().WithVerbose()
 		docker = occam.NewDocker()

@@ -72,9 +72,7 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 						settings.Extensions.UbiNodejsExtension.Online,
 					).
 					WithBuildpacks(
-						settings.Buildpacks.NodeEngine.Online,
-						settings.Buildpacks.NPMInstall.Online,
-						settings.Buildpacks.BuildPlan.Online,
+						settings.Buildpacks.Nodejs.Online,
 					).
 					WithBuilder(builder.imageUrl).
 					WithNetwork("host").
