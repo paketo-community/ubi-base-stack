@@ -36,20 +36,12 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 		builderImageUrl string
 	)
 
-	stackRelativePaths := []string{
-		"build",
-	}
-
-	for _, nodeMajorVersion := range settings.Config.NodeMajorVersions {
-		stackRelativePaths = append(stackRelativePaths, fmt.Sprintf("build-nodejs-%d", nodeMajorVersion))
-	}
-
 	it.Before(func() {
 		pack = occam.NewPack().WithVerbose()
 		docker = occam.NewDocker()
 	})
 
-	context("When building an app", func() {
+	context("When building an app using default stack", func() {
 
 		it.After(func() {
 			Expect(docker.Container.Remove.Execute(container.ID)).To(Succeed())
@@ -68,11 +60,66 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		for _, srp := range stackRelativePaths {
-			currentStackRelativePath := srp
+		return
 
-			it(fmt.Sprintf("should be a success when using run image from stack %s", currentStackRelativePath), func() {
-				buildImageID, _, runImageID, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(filepath.Join(root, currentStackRelativePath), RegistryUrl)
+		it("should successfully build a go app", func() {
+			buildImageID, _, runImageID, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(filepath.Join(root, "build"), RegistryUrl)
+			Expect(err).NotTo(HaveOccurred())
+
+			image, _, err = pack.WithNoColor().Build.
+				WithBuildpacks(
+					settings.Buildpacks.GoDist.Online,
+					settings.Buildpacks.BuildPlan.Online,
+				).
+				WithEnv(map[string]string{
+					"BP_LOG_LEVEL": "DEBUG",
+				}).
+				WithPullPolicy("if-not-present").
+				WithBuilder(builderImageUrl).
+				Execute(name, source)
+			Expect(err).NotTo(HaveOccurred())
+
+			container, err = docker.Container.Run.
+				WithDirect().
+				WithCommand("go").
+				WithCommandArgs([]string{"run", "main.go"}).
+				WithEnv(map[string]string{"PORT": "8080"}).
+				WithPublish("8080").
+				WithPublishAll().
+				Execute(image.ID)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(container).Should(BeAvailable())
+			Eventually(container).Should(Serve(MatchRegexp(`go1.*`)).OnPort(8080))
+
+		})
+	})
+
+	context("When building an app using nodejs stacks", func() {
+
+		it.After(func() {
+			Expect(docker.Container.Remove.Execute(container.ID)).To(Succeed())
+			Expect(docker.Image.Remove.Execute(image.ID)).To(Succeed())
+			Expect(docker.Volume.Remove.Execute(occam.CacheVolumeNames(name))).To(Succeed())
+			err = utils.RemoveImages(docker, []string{buildImageID, runImageID, runImageUrl, builderImageUrl})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(os.RemoveAll(source)).To(Succeed())
+		})
+
+		it.Before(func() {
+			name, err = occam.RandomName()
+			Expect(err).NotTo(HaveOccurred())
+
+			source, err = occam.Source(filepath.Join("integration", "testdata", "simple_app"))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		stacks := utils.GetStacksInfo(settings.Config.NodeMajorVersions, "nodejs", root)
+
+		for _, stack := range stacks {
+
+			it(fmt.Sprintf("it should successfully build a nodejs app with node version %d", stack.MajorVersion), func() {
+				buildImageID, _, runImageID, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(stack.StackAbsPath, RegistryUrl)
 				Expect(err).NotTo(HaveOccurred())
 
 				image, _, err = pack.WithNoColor().Build.
@@ -100,8 +147,9 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 
 				Eventually(container).Should(BeAvailable())
 				Eventually(container).Should(Serve(MatchRegexp(`go1.*`)).OnPort(8080))
-
+				Eventually(container).Should(Serve(MatchRegexp(fmt.Sprintf(`v%d.*`, stack.MajorVersion))).OnPort(8080).WithEndpoint("/node/version"))
 			})
 		}
 	})
+
 }

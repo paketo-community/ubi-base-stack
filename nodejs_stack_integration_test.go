@@ -39,7 +39,7 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 		docker = occam.NewDocker()
 	})
 
-	context("When building an app", func() {
+	context("When building an app with nodejs stacks", func() {
 
 		it.Before(func() {
 
@@ -58,13 +58,13 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 			Expect(docker.Image.Remove.Execute(bpUbiRunImageOverrideImageID)).To(Succeed())
 		})
 
-		for _, value := range settings.Config.NodeMajorVersions {
-			nodeMajorVersion := value
-			it(fmt.Sprintf("it successfully builds an app using Nodejs %d run image", nodeMajorVersion), func() {
+		stacks := utils.GetStacksInfo(settings.Config.NodeMajorVersions, "nodejs", root)
 
-				//Creating and pushing the run image to registry
-				runNodejsArchive := filepath.Join(root, fmt.Sprintf("./build-nodejs-%d", nodeMajorVersion), "run.oci")
-				bpUbiRunImageOverrideImageID, err = utils.PushFileToLocalRegistry(runNodejsArchive, RegistryUrl, fmt.Sprintf("run-nodejs-%d-%s", nodeMajorVersion, uuid.NewString()))
+		for _, stack := range stacks {
+			it(fmt.Sprintf("it successfully builds an app using Nodejs %d run image", stack.MajorVersion), func() {
+
+				runArchive := filepath.Join(stack.StackAbsPath, "run.oci")
+				bpUbiRunImageOverrideImageID, err = utils.PushFileToLocalRegistry(runArchive, RegistryUrl, fmt.Sprintf("run-%s-%d-%s", stack.Engine, stack.MajorVersion, uuid.NewString()))
 				Expect(err).NotTo(HaveOccurred())
 
 				image, _, err = pack.Build.
@@ -88,6 +88,7 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(container).Should(Serve("Hello World!"))
+				Eventually(container).Should(Serve(MatchRegexp(fmt.Sprintf(`v%d.*`, stack.MajorVersion))).OnPort(8080).WithEndpoint("/node/version"))
 			})
 		}
 	})
