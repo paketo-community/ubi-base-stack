@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	utils "github.com/paketo-community/ubi-base-stack/utils"
+	utils "github.com/paketo-community/ubi-base-stack/internal/utils"
 	"github.com/sclevine/spec"
 
 	. "github.com/onsi/gomega"
@@ -38,10 +38,13 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 
 	stackRelativePaths := []string{
 		"build",
-		"build-nodejs-16",
-		"build-nodejs-18",
-		"build-nodejs-20",
 	}
+
+	for _, nodeMajorVersion := range settings.Config.NodeMajorVersions {
+		stackRelativePaths = append(stackRelativePaths, fmt.Sprintf("build-nodejs-%d", nodeMajorVersion))
+	}
+
+	fmt.Println(stackRelativePaths)
 
 	it.Before(func() {
 		pack = occam.NewPack().WithVerbose()

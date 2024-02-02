@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/paketo-buildpacks/occam"
-	utils "github.com/paketo-community/ubi-base-stack/utils"
+	utils "github.com/paketo-community/ubi-base-stack/internal/utils"
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
 
@@ -54,12 +54,14 @@ var settings struct {
 		NodeEngine         string `json:"node-engine"`
 		NPMInstall         string `json:"npm-install"`
 		GoDist             string `json:"go-dist"`
+		NodeMajorVersions  []int  `json:"nodejs-major-versions"`
 	}
 }
 
 func by(_ string, f func()) { f() }
 
 func TestAcceptance(t *testing.T) {
+
 	var err error
 	Expect := NewWithT(t).Expect
 

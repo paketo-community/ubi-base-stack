@@ -13,22 +13,8 @@ import (
 
 	"github.com/paketo-buildpacks/occam"
 	. "github.com/paketo-buildpacks/occam/matchers"
-	utils "github.com/paketo-community/ubi-base-stack/utils"
+	utils "github.com/paketo-community/ubi-base-stack/internal/utils"
 )
-
-var nodeMajorVersions = []struct {
-	nodeMajorVersion int
-}{
-	{
-		nodeMajorVersion: 16,
-	},
-	{
-		nodeMajorVersion: 18,
-	},
-	{
-		nodeMajorVersion: 20,
-	},
-}
 
 func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 	var (
@@ -72,8 +58,8 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 			Expect(docker.Image.Remove.Execute(bpUbiRunImageOverrideImageID)).To(Succeed())
 		})
 
-		for _, nmvs := range nodeMajorVersions {
-			nodeMajorVersion := nmvs.nodeMajorVersion
+		for _, value := range settings.Config.NodeMajorVersions {
+			nodeMajorVersion := value
 			it(fmt.Sprintf("it successfully builds an app using Nodejs %d run image", nodeMajorVersion), func() {
 
 				//Creating and pushing the run image to registry
