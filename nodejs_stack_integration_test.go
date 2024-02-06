@@ -13,6 +13,7 @@ import (
 
 	"github.com/paketo-buildpacks/occam"
 	. "github.com/paketo-buildpacks/occam/matchers"
+	structs "github.com/paketo-community/ubi-base-stack/internal/structs"
 	utils "github.com/paketo-community/ubi-base-stack/internal/utils"
 )
 
@@ -28,6 +29,7 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 		source string
 		name   string
 
+		// These variables probably are not being used
 		image     occam.Image
 		container occam.Container
 
@@ -58,12 +60,17 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 			Expect(docker.Image.Remove.Execute(bpUbiRunImageOverrideImageID)).To(Succeed())
 		})
 
-		stacks := utils.GetStacksInfo(settings.Config.NodeMajorVersions, "nodejs", root)
+		var stacks []structs.Stack
+
+		for _, nodeMajorVersion := range settings.Config.NodeMajorVersions {
+			stacks = append(stacks, structs.NewStack(nodeMajorVersion, "nodejs", root))
+		}
 
 		for _, stack := range stacks {
+			// Create a copy of the stack to get the value and instead of the pointer
+			stack := stack
 			it(fmt.Sprintf("it successfully builds an app using Nodejs %d run image", stack.MajorVersion), func() {
-
-				runArchive := filepath.Join(stack.StackAbsPath, "run.oci")
+				runArchive := filepath.Join(stack.AbsPath, "run.oci")
 				bpUbiRunImageOverrideImageID, err = utils.PushFileToLocalRegistry(runArchive, RegistryUrl, fmt.Sprintf("run-%s-%d-%s", stack.Engine, stack.MajorVersion, uuid.NewString()))
 				Expect(err).NotTo(HaveOccurred())
 

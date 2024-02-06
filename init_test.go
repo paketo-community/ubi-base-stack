@@ -86,11 +86,9 @@ func TestAcceptance(t *testing.T) {
 		Execute(settings.Config.Nodejs)
 	Expect(err).ToNot(HaveOccurred())
 
-
 	settings.Buildpacks.BuildPlan.Online, err = buildpackStore.Get.
 		Execute(settings.Config.BuildPlan)
 	Expect(err).ToNot(HaveOccurred())
-
 
 	settings.Buildpacks.GoDist.Online, err = buildpackStore.Get.
 		Execute(settings.Config.GoDist)

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	structs "github.com/paketo-community/ubi-base-stack/internal/structs"
 	utils "github.com/paketo-community/ubi-base-stack/internal/utils"
 	"github.com/sclevine/spec"
 
@@ -60,8 +61,6 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		return
-
 		it("should successfully build a go app", func() {
 			buildImageID, _, runImageID, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(filepath.Join(root, "build"), RegistryUrl)
 			Expect(err).NotTo(HaveOccurred())
@@ -114,12 +113,17 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		stacks := utils.GetStacksInfo(settings.Config.NodeMajorVersions, "nodejs", root)
+		var stacks []structs.Stack
+
+		for _, nodeMajorVersion := range settings.Config.NodeMajorVersions {
+			stacks = append(stacks, structs.NewStack(nodeMajorVersion, "nodejs", root))
+		}
 
 		for _, stack := range stacks {
-
+			// Create a copy of the stack to get the value and instead of the pointer
+			stack := stack
 			it(fmt.Sprintf("it should successfully build a nodejs app with node version %d", stack.MajorVersion), func() {
-				buildImageID, _, runImageID, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(stack.StackAbsPath, RegistryUrl)
+				buildImageID, _, runImageID, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(stack.AbsPath, RegistryUrl)
 				Expect(err).NotTo(HaveOccurred())
 
 				image, _, err = pack.WithNoColor().Build.

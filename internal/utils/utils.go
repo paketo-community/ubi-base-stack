@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/google/uuid"
-	structs "github.com/paketo-community/ubi-base-stack/internal/structs"
 
 	"github.com/paketo-buildpacks/occam"
 	"github.com/paketo-buildpacks/packit/v2/pexec"
@@ -103,6 +102,10 @@ func archiveToDaemon(path, id string) error {
 func PushFileToLocalRegistry(filePath string, registryUrl string, imageName string) (string, error) {
 	buf := bytes.NewBuffer(nil)
 
+	fmt.Println("filePath: ", filePath)
+	fmt.Println("registryUrl: ", registryUrl)
+	fmt.Println("imageName: ", imageName)
+
 	imageURL := fmt.Sprintf("%s/%s", registryUrl, imageName)
 
 	skopeo := pexec.NewExecutable("skopeo")
@@ -182,15 +185,4 @@ func GetLifecycleVersion(builderUrl string) (string, error) {
 		return "", err
 	}
 	return builder.LocalInfo.Lifecycle.Version, nil
-}
-
-func GetStacksInfo(majorVersions []int, engine string, rootDir string) (stacks []structs.Stack) {
-	for _, majorVersion := range majorVersions {
-		stacks = append(stacks, structs.Stack{
-			MajorVersion: majorVersion,
-			StackAbsPath: filepath.Join(rootDir, fmt.Sprintf("build-%s-%d", engine, majorVersion)),
-			Engine:       engine,
-		})
-	}
-	return stacks
 }
