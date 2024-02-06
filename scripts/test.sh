@@ -47,7 +47,7 @@ function main() {
         shift 2
         ;;
 
-    --regport | -r)
+    --regport | -p)
       regport="${2}"
       shift 2
       ;;
@@ -95,15 +95,17 @@ function main() {
     regport="5000"
   fi
 
-  if [[ "$(curl -s -o /dev/null -w "%{http_code}" localhost:$regport/v2/)" == "200" ]]; then
-    echo "Using existing local registry"
-    tests::run $regport ""
-  else
-    echo "Creating local registry"
-    local local_registry_container_id
-    local_registry_container_id=$(docker run -d -p "${regport}:5000" --restart=always --name registry registry:2)
-    tests::run $regport $local_registry_container_id
-  fi
+  util::print::title "Setting up local registry"
+
+  registry_container_id=$(util::tools::setup_local_registry "$regport")
+
+  export REGISTRY_URL="localhost:${regport}"
+
+  pack config experimental true
+
+  tests::run
+
+  util::tools::cleanup_local_registry "${registry_container_id}"
 }
 
 function usage() {
@@ -131,10 +133,10 @@ ${STACK_DIR}/build-java-21/run.oci
 if they exist. Otherwise, first runs create.sh to create them.
 
 OPTIONS
-  --clean         -c  clears contents of stack output directory before running tests
-  --regport <port> Local port to use for local registry during tests, defaults to 5000
-  --token <token>     Token used to download assets from GitHub (e.g. jam, pack, etc) (optional)
-  --help          -h  prints the command usage
+  --clean          -c  clears contents of stack output directory before running tests
+  --regport <port> -p  Local port to use for local registry during tests, defaults to 5000
+  --token <token>  -t  Token used to download assets from GitHub (e.g. jam, pack, etc) (optional)
+  --help           -h  prints the command usage
 USAGE
 }
 
@@ -156,14 +158,6 @@ function tools::install() {
 function tests::run() {
   util::print::title "Run Stack Acceptance Tests"
 
-  local local_registry_port
-  local_registry_port="${1}"
-
-  local_registry_container_id="${2}"
-  export REGISTRY_URL="localhost:${local_registry_port}"
-
-  pack config experimental true
-
   export CGO_ENABLED=0
   testout=$(mktemp)
   pushd "${STACK_DIR}" > /dev/null
@@ -173,12 +167,6 @@ function tests::run() {
     else
       util::print::error "** GO Test Failed **"
     fi
-
-  if [[ -n "${local_registry_container_id}" ]]; then
-    docker stop $local_registry_container_id
-    docker rm $local_registry_container_id
-  fi
-
   popd > /dev/null
 }
 

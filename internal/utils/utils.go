@@ -102,10 +102,6 @@ func archiveToDaemon(path, id string) error {
 func PushFileToLocalRegistry(filePath string, registryUrl string, imageName string) (string, error) {
 	buf := bytes.NewBuffer(nil)
 
-	fmt.Println("filePath: ", filePath)
-	fmt.Println("registryUrl: ", registryUrl)
-	fmt.Println("imageName: ", imageName)
-
 	imageURL := fmt.Sprintf("%s/%s", registryUrl, imageName)
 
 	skopeo := pexec.NewExecutable("skopeo")
