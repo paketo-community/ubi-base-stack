@@ -548,7 +548,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			err := os.Mkdir(dir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
-			archive, err := os.Open(stack.RunJava17Archive)
+			archive, err := os.Open(stack.RunJava21Archive)
 			Expect(err).NotTo(HaveOccurred())
 			defer archive.Close()
 
@@ -586,9 +586,9 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
 			))
 
-			runReleaseDateJava17, err := time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
+			runReleaseDateJava21, err := time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
 			Expect(err).NotTo(HaveOccurred())
-			Expect(runReleaseDateJava17).NotTo(BeZero())
+			Expect(runReleaseDateJava21).NotTo(BeZero())
 
 			Expect(file.Config.User).To(Equal("1001:1000"))
 
