@@ -103,7 +103,7 @@ function main() {
 
   pack config experimental true
 
-  tests::run
+  tests::run "${registry_container_id}"
 
   util::tools::cleanup_local_registry "${registry_container_id}"
 }
@@ -156,6 +156,9 @@ function tools::install() {
 }
 
 function tests::run() {
+  local registry_container_id
+  registry_container_id="${1}"
+
   util::print::title "Run Stack Acceptance Tests"
 
   export CGO_ENABLED=0
@@ -163,10 +166,38 @@ function tests::run() {
   pushd "${STACK_DIR}" > /dev/null
     if GOMAXPROCS="${GOMAXPROCS:-4}" go test -count=1 -timeout 0 ./... -v -run Acceptance | tee "${testout}"; then
       util::tools::tests::checkfocus "${testout}"
+      util::tools::cleanup_local_registry "${registry_container_id}"
       util::print::success "** GO Test Succeeded **"
     else
+      util::tools::cleanup_local_registry "${registry_container_id}"
       util::print::error "** GO Test Failed **"
     fi
   popd > /dev/null
 }
 
+
+function util::tools::setup_local_registry() {
+
+  registry_port="${1}"
+
+  local registry_container_id
+  if [[ "$(curl -s -o /dev/null -w "%{http_code}" localhost:$registry_port/v2/)" == "200" ]]; then
+    registry_container_id=""
+  else
+    registry_container_id=$(docker run -d -p "${registry_port}:5000" --restart=always registry:2)
+  fi
+
+  echo $registry_container_id
+}
+
+function util::tools::cleanup_local_registry() {
+  local registry_container_id
+  registry_container_id="${1}"
+
+  if [[ -n "${registry_container_id}" ]]; then
+    docker stop $registry_container_id
+    docker rm $registry_container_id
+  fi
+}
+
+main "${@:-}"
