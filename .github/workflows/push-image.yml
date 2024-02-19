@@ -3,167 +3,107 @@ name: Push Stack Image
 on:
   release:
     types:
-    - published
+      - published
 
 jobs:
+  prepare_matrix:
+    name: Prepare_matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      release_version:  ${{ steps.release-version.outputs.release_version }}
+    steps:
+      - name: Get release version
+        id: release-version
+        run: |
+          release_version="$(jq -r '.release.tag_name' "${GITHUB_EVENT_PATH}" | sed s/^v//)"
+          printf "release_version=%s\n" "${release_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Set matrix
+        id: set-matrix
+        run: |
+
+          # Strip off the org and slash from repo name
+          # paketo-buildpacks/repo-name --> repo-name
+          repo_name=$(echo "${{ github.repository }}" | sed 's/^.*\///')
+          asset_prefix="${repo_name}-${{ steps.release-version.outputs.release_version }}-"
+          oci_images=$(jq -c --arg asset_prefix "$asset_prefix" '[.release.assets[].name | select(endswith(".oci")) | split(".oci") | .[0] | split($asset_prefix) | .[1]]' "${GITHUB_EVENT_PATH}")
+          printf "matrix=%s\n" "${oci_images}" >> "$GITHUB_OUTPUT"
+
   push:
     name: Push
     runs-on: ubuntu-22.04
+    needs: prepare_matrix
+    strategy:
+      matrix:
+        oci_image: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
+
     steps:
+      - name: Parse Release Assets
+        id: release_assets
+        run: |
+          echo "${{ matrix.oci_image }}_download_url=$(jq -r '.release.assets[] | select(.name | endswith("${{ matrix.oci_image }}.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
 
-    - name: Parse Event
-      id: event
-      run: |
-        echo "tag=$(jq -r '.release.tag_name' "${GITHUB_EVENT_PATH}" | sed s/^v//)" >> "$GITHUB_OUTPUT"
-        echo "build_download_url=$(jq -r '.release.assets[] | select(.name | endswith("build.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
-        echo "run_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
-        echo "run_nodejs_16_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-nodejs-16.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
-        echo "run_nodejs_18_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-nodejs-18.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
-        echo "run_nodejs_20_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-nodejs-20.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
-        echo "run_java_8_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-java-8.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
-        echo "run_java_11_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-java-11.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
-        echo "run_java_17_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-java-17.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
-        echo "run_java_21_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-java-21.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
+      - name: Parse Event
+        id: event
+        run: |
+          echo "${{ matrix.oci_image }}"
+          echo "tag=$(jq -r '.release.tag_name' "${GITHUB_EVENT_PATH}" | sed s/^v//)" >> "$GITHUB_OUTPUT"
 
-    - name: Checkout
-      uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
-    - name: Download Build Image
-      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
-      with:
-        url: ${{ steps.event.outputs.build_download_url }}
-        output: "/github/workspace/build.oci"
-        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+      - name: Download ${{ matrix.oci_image }} Image
+        uses: paketo-buildpacks/github-config/actions/release/download-asset@main
+        with:
+          url: ${{ steps.release_assets.outputs[format('{0}_download_url', matrix.oci_image)] }}
+          output: "/github/workspace/${{ matrix.oci_image }}.oci"
+          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
-    - name: Download Run Image
-      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
-      with:
-        url: ${{ steps.event.outputs.run_download_url }}
-        output: "/github/workspace/run.oci"
-        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+      - name: Get Registry Repo Name
+        id: registry-repo
+        run: |
+          # Strip off the Github org prefix and 'stack' suffix from repo name
+          # paketo-buildpacks/some-name-stack --> some-name
+          echo "name=$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-stack$//')" >> "$GITHUB_OUTPUT"
 
-    - name: Download nodejs-16 Run Image
-      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
-      with:
-        url: ${{ steps.event.outputs.run_nodejs_16_download_url }}
-        output: "/github/workspace/run-nodejs-16.oci"
-        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+      - name: Push ${{ matrix.oci_image }} Image to DockerHub and GCR
+        id: push
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_PASSWORD }}
+          GCR_USERNAME: _json_key
+          GCR_PASSWORD: ${{ secrets.GCR_PUSH_BOT_JSON_KEY }}
+        run: |
+          DOCKERHUB_ORG="${GITHUB_REPOSITORY_OWNER/-/}" # translates 'paketo-buildpacks' to 'paketobuildpacks'
+          echo "${DOCKERHUB_PASSWORD}" | sudo skopeo login --username "${DOCKERHUB_USERNAME}" --password-stdin index.docker.io
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:latest"
 
-    - name: Download nodejs-18 Run Image
-      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
-      with:
-        url: ${{ steps.event.outputs.run_nodejs_18_download_url }}
-        output: "/github/workspace/run-nodejs-18.oci"
-        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+          GCR_PROJECT="${GITHUB_REPOSITORY_OWNER/-/}" # translates 'paketo-buildpacks' to 'paketobuildpacks'
+          echo "${GCR_PASSWORD}" | sudo skopeo login --username "${GCR_USERNAME}" --password-stdin gcr.io
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:latest"
 
-    - name: Download nodejs-20 Run Image
-      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
-      with:
-        url: ${{ steps.event.outputs.run_nodejs_20_download_url }}
-        output: "/github/workspace/run-nodejs-20.oci"
-        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+          # If the repository name contains 'bionic', let's push it to legacy image locations as well:
+          #    paketobuildpacks/{build/run}:{version}-{variant}
+          #    paketobuildpacks/{build/run}:{version}-{variant}-cnb
+          #    paketobuildpacks/{build/run}:{variant}-cnb
+          #    paketobuildpacks/{build/run}:{variant}
+          registry_repo="${{ steps.registry-repo.outputs.name }}"
+          if [[ ${registry_repo} == "bionic"-* ]];
+            then
+            # Strip the final part from a repo name after the `-`
+            # bionic-tiny --> tiny
+            variant="${registry_repo#bionic-}"
 
-    - name: Download java-8 Run Image
-      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
-      with:
-        url: ${{ steps.event.outputs.run_java_8_download_url }}
-        output: "/github/workspace/run-java-8.oci"
-        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+            sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${{ steps.event.outputs.tag }}-${variant}"
+            sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${{ steps.event.outputs.tag }}-${variant}-cnb"
+            sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${variant}-cnb"
+            sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${variant}"
 
-    - name: Download java-11 Run Image
-      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
-      with:
-        url: ${{ steps.event.outputs.run_java_11_download_url }}
-        output: "/github/workspace/run-java-11.oci"
-        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-    - name: Download java-17 Run Image
-      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
-      with:
-        url: ${{ steps.event.outputs.run_java_17_download_url }}
-        output: "/github/workspace/run-java-17.oci"
-        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-    - name: Download java-21 Run Image
-      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
-      with:
-        url: ${{ steps.event.outputs.run_java_21_download_url }}
-        output: "/github/workspace/run-java-21.oci"
-        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-    - name: Get Registry Repo Name
-      id: registry-repo
-      run: |
-        # Strip off the Github org prefix and 'stack' suffix from repo name
-        # paketo-buildpacks/some-name-stack --> some-name
-        echo "name=$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-stack$//')" >> "$GITHUB_OUTPUT"
-
-    - name: Push to DockerHub
-      id: push
-      env:
-        DOCKERHUB_USERNAME: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_USERNAME }}
-        DOCKERHUB_PASSWORD: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_PASSWORD }}
-        DOCKERHUB_ORG: "paketocommunity"
-        GCR_USERNAME: _json_key
-        GCR_PASSWORD: ${{ secrets.GCR_PUSH_BOT_JSON_KEY }}
-        GCR_PROJECT: "paketo-community"
-      run: |
-        echo "${DOCKERHUB_PASSWORD}" | sudo skopeo login --username "${DOCKERHUB_USERNAME}" --password-stdin index.docker.io
-        # echo "${GCR_PASSWORD}" | sudo skopeo login --username "${GCR_USERNAME}" --password-stdin gcr.io
-
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build-${{ steps.registry-repo.outputs.name }}:latest"
-
-        # sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://gcr.io/${GCR_PROJECT}/build-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        # sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://gcr.io/${GCR_PROJECT}/build-${{ steps.registry-repo.outputs.name }}:latest"
-
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run-${{ steps.registry-repo.outputs.name }}:latest"
-
-        # sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://gcr.io/${GCR_PROJECT}/run-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        # sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://gcr.io/${GCR_PROJECT}/run-${{ steps.registry-repo.outputs.name }}:latest"
-
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-16.oci" "docker://${DOCKERHUB_ORG}/run-nodejs-16-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-16.oci" "docker://${DOCKERHUB_ORG}/run-nodejs-16-${{ steps.registry-repo.outputs.name }}:latest"
-
-        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-16.oci" "docker://gcr.io/${GCR_PROJECT}/run-nodejs-16-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-16.oci" "docker://gcr.io/${GCR_PROJECT}/run-nodejs-16-${{ steps.registry-repo.outputs.name }}:latest"
-
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-18.oci" "docker://${DOCKERHUB_ORG}/run-nodejs-18-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-18.oci" "docker://${DOCKERHUB_ORG}/run-nodejs-18-${{ steps.registry-repo.outputs.name }}:latest"
-
-        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-18.oci" "docker://gcr.io/${GCR_PROJECT}/run-nodejs-18-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-18.oci" "docker://gcr.io/${GCR_PROJECT}/run-nodejs-18-${{ steps.registry-repo.outputs.name }}:latest"
-
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-20.oci" "docker://${DOCKERHUB_ORG}/run-nodejs-20-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-20.oci" "docker://${DOCKERHUB_ORG}/run-nodejs-20-${{ steps.registry-repo.outputs.name }}:latest"
-
-        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-20.oci" "docker://gcr.io/${GCR_PROJECT}/run-nodejs-20-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-nodejs-20.oci" "docker://gcr.io/${GCR_PROJECT}/run-nodejs-20-${{ steps.registry-repo.outputs.name }}:latest"
-
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-8.oci" "docker://${DOCKERHUB_ORG}/run-java-8-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-8.oci" "docker://${DOCKERHUB_ORG}/run-java-8-${{ steps.registry-repo.outputs.name }}:latest"
-
-        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-8.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-8-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-8.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-8-${{ steps.registry-repo.outputs.name }}:latest"
-
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-11.oci" "docker://${DOCKERHUB_ORG}/run-java-11-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-11.oci" "docker://${DOCKERHUB_ORG}/run-java-11-${{ steps.registry-repo.outputs.name }}:latest"
-
-        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-11.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-11-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-11.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-11-${{ steps.registry-repo.outputs.name }}:latest"
-
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-17.oci" "docker://${DOCKERHUB_ORG}/run-java-17-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-17.oci" "docker://${DOCKERHUB_ORG}/run-java-17-${{ steps.registry-repo.outputs.name }}:latest"
-
-        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-17.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-17-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-17.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-17-${{ steps.registry-repo.outputs.name }}:latest"
-
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-21.oci" "docker://${DOCKERHUB_ORG}/run-java-21-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-21.oci" "docker://${DOCKERHUB_ORG}/run-java-21-${{ steps.registry-repo.outputs.name }}:latest"
-
-        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-21.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-21-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-21.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-21-${{ steps.registry-repo.outputs.name }}:latest"
+            sudo skopeo copy "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${variant}-cnb" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image }}:${variant}-cnb"
+          fi
 
   failure:
     name: Alert on Failure
@@ -171,16 +111,16 @@ jobs:
     needs: [push]
     if: ${{ always() && needs.push.result == 'failure' }}
     steps:
-    - name: File Failure Alert Issue
-      uses: paketo-buildpacks/github-config/actions/issue/file@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        repo: ${{ github.repository }}
-        label: "failure:push"
-        comment_if_exists: true
-        issue_title: "Failure: Push Image workflow"
-        issue_body: |
-          Push Image workflow [failed](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}).
-          Please take a look to ensure CVE patches can be released. (cc @paketo-buildpacks/stacks-maintainers).
-        comment_body: |
-           Another failure occurred: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
+      - name: File Failure Alert Issue
+        uses: paketo-buildpacks/github-config/actions/issue/file@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repo: ${{ github.repository }}
+          label: "failure:push"
+          comment_if_exists: true
+          issue_title: "Failure: Push Image workflow"
+          issue_body: |
+            Push Image workflow [failed](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}).
+            Please take a look to ensure CVE patches can be released. (cc @paketo-buildpacks/stacks-maintainers).
+          comment_body: |
+            Another failure occurred: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
