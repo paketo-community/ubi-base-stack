@@ -113,7 +113,7 @@ jobs:
           search_depth: 1
           repo: ${{ github.repository }}
           output_path: "/github/workspace/${{ env.UBI_RUN_JAVA_11_SHA256_FILENAME }}"
-          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}  
+          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
       - name: Find and Download Previous run Java 17 sha256 image hash code
         id: fetch_previous_run_java_17_sha256_image_hash_code
@@ -840,7 +840,7 @@ jobs:
                 "path": "build-java-17/run.oci.sha256",
                 "name": ($repo + "-" + $tag + "-" + "run-java-17.oci.sha256"),
                 "content_type": "application/gzip"
-              },                            
+              },
               {
                 "path": "build-java-21/run.oci",
                 "name": ($repo + "-" + $tag + "-" + "run-java-21.oci"),
@@ -850,7 +850,17 @@ jobs:
                 "path": "build-java-21/run.oci.sha256",
                 "name": ($repo + "-" + $tag + "-" + "run-java-21.oci.sha256"),
                 "content_type": "application/gzip"
-              },                            
+              },                     
+              {
+                "path": "build-java-21/run.oci",
+                "name": ($repo + "-" + $tag + "-" + "run-java-21.oci"),
+                "content_type": "application/gzip"
+              },
+              {
+                "path": "build-java-21/run.oci.sha256",
+                "name": ($repo + "-" + $tag + "-" + "run-java-21.oci.sha256"),
+                "content_type": "application/gzip"
+              },
               {
                 "path": "build-nodejs-16/run.oci",
                 "name": ($repo + "-" + $tag + "-" + "run-nodejs-16.oci"),

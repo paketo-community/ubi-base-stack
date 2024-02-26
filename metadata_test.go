@@ -159,6 +159,10 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				majorVersion: 17,
 				typeName:     "java",
 			},
+			{
+				majorVersion: 21,
+				typeName:     "java",
+			},
 		}
 
 		for _, engine := range engines {
@@ -209,69 +213,6 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				)))
 			})
 		}
-
-		by("confirming that the run java-21 image is correct", func() {
-			dir := filepath.Join(tmpDir, "run-index-java-21")
-			err := os.Mkdir(dir, os.ModePerm)
-			Expect(err).NotTo(HaveOccurred())
-
-			archive, err := os.Open(stack.RunJava21Archive)
-			Expect(err).NotTo(HaveOccurred())
-			defer archive.Close()
-
-			err = vacation.NewArchive(archive).Decompress(dir)
-			Expect(err).NotTo(HaveOccurred())
-
-			path, err := layout.FromPath(dir)
-			Expect(err).NotTo(HaveOccurred())
-
-			index, err := path.ImageIndex()
-			Expect(err).NotTo(HaveOccurred())
-
-			indexManifest, err := index.IndexManifest()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(indexManifest.Manifests).To(HaveLen(1))
-			Expect(indexManifest.Manifests[0].Platform).To(Equal(&v1.Platform{
-				OS:           "linux",
-				Architecture: "amd64",
-			}))
-
-			image, err := index.Image(indexManifest.Manifests[0].Digest)
-			Expect(err).NotTo(HaveOccurred())
-
-			file, err := image.ConfigFile()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(file.Config.Labels).To(SatisfyAll(
-				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.ubi8"),
-				HaveKeyWithValue("io.buildpacks.stack.description", "ubi8 java-21 image to support buildpacks"),
-				HaveKeyWithValue("io.buildpacks.stack.distro.name", "rhel"),
-				HaveKeyWithValue("io.buildpacks.stack.distro.version", MatchRegexp(`8\.\d+`)),
-				HaveKeyWithValue("io.buildpacks.stack.homepage", "https://github.com/paketo-community/ubi-base-stack"),
-				HaveKeyWithValue("io.buildpacks.stack.maintainer", "Paketo Community"),
-				HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
-			))
-
-			runReleaseDateJava21, err := time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
-			Expect(err).NotTo(HaveOccurred())
-			Expect(runReleaseDateJava21).NotTo(BeZero())
-
-			Expect(file.Config.User).To(Equal("1001:1000"))
-
-			Expect(image).To(SatisfyAll(
-				HaveFileWithContent("/etc/group", ContainSubstring("cnb:x:1000:")),
-				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1001:1000::/home/cnb:/bin/bash")),
-				HaveDirectory("/home/cnb"),
-			))
-
-			Expect(image).To(HaveFileWithContent("/etc/os-release", SatisfyAll(
-				ContainLines(MatchRegexp(`PRETTY_NAME=\"Red Hat Enterprise Linux 8\.\d+ \(Ootpa\)\"`)),
-				ContainSubstring(`HOME_URL="https://github.com/paketo-community/ubi-base-stack"`),
-				ContainSubstring(`SUPPORT_URL="https://github.com/paketo-community/ubi-base-stack/blob/main/README.md"`),
-				ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-community/ubi-base-stack/issues/new"`),
-			)))
-		})
 
 		Expect(runReleaseDate).To(Equal(buildReleaseDate))
 	})
