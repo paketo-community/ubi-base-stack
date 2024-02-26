@@ -162,8 +162,8 @@ jobs:
         sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-21.oci" "docker://${DOCKERHUB_ORG}/run-java-21-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
         sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-21.oci" "docker://${DOCKERHUB_ORG}/run-java-21-${{ steps.registry-repo.outputs.name }}:latest"
 
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-21.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-21-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-21.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-21-${{ steps.registry-repo.outputs.name }}:latest"
+        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-21.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-21-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
+        #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-21.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-21-${{ steps.registry-repo.outputs.name }}:latest"
 
   failure:
     name: Alert on Failure
