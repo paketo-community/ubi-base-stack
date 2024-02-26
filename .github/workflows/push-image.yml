@@ -23,6 +23,7 @@ jobs:
         echo "run_java_8_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-java-8.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
         echo "run_java_11_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-java-11.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
         echo "run_java_17_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-java-17.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
+        echo "run_java_21_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-java-21.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
 
     - name: Checkout
       uses: actions/checkout@v3
@@ -81,6 +82,13 @@ jobs:
       with:
         url: ${{ steps.event.outputs.run_java_17_download_url }}
         output: "/github/workspace/run-java-17.oci"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+    - name: Download java-21 Run Image
+      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
+      with:
+        url: ${{ steps.event.outputs.run_java_21_download_url }}
+        output: "/github/workspace/run-java-21.oci"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
     - name: Get Registry Repo Name
@@ -151,6 +159,11 @@ jobs:
         #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-17.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-17-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
         #sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-17.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-17-${{ steps.registry-repo.outputs.name }}:latest"
 
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-21.oci" "docker://${DOCKERHUB_ORG}/run-java-21-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-21.oci" "docker://${DOCKERHUB_ORG}/run-java-21-${{ steps.registry-repo.outputs.name }}:latest"
+
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-21.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-21-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run-java-21.oci" "docker://gcr.io/${GCR_PROJECT}/run-java-21-${{ steps.registry-repo.outputs.name }}:latest"
 
   failure:
     name: Alert on Failure

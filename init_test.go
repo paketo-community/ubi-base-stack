@@ -25,6 +25,7 @@ var stack struct {
 	RunJava8Archive    string
 	RunJava11Archive   string
 	RunJava17Archive   string
+	RunJava21Archive   string
 }
 
 func by(_ string, f func()) { f() }
@@ -48,6 +49,7 @@ func TestAcceptance(t *testing.T) {
 	stack.RunJava8Archive = filepath.Join(root, "build-java-8", "run.oci")
 	stack.RunJava11Archive = filepath.Join(root, "build-java-11", "run.oci")
 	stack.RunJava17Archive = filepath.Join(root, "build-java-17", "run.oci")
+	stack.RunJava21Archive = filepath.Join(root, "build-java-21", "run.oci")
 
 	SetDefaultEventuallyTimeout(30 * time.Second)
 

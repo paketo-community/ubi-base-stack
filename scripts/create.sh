@@ -13,4 +13,4 @@ STACK_DIR=${ROOT_DIR}/stack-nodejs-20 BUILD_DIR=${ROOT_DIR}/build-nodejs-20 bash
 STACK_DIR=${ROOT_DIR}/stack-java-8 BUILD_DIR=${ROOT_DIR}/build-java-8 bash $PROG_DIR/create-one.sh
 STACK_DIR=${ROOT_DIR}/stack-java-11 BUILD_DIR=${ROOT_DIR}/build-java-11 bash $PROG_DIR/create-one.sh
 STACK_DIR=${ROOT_DIR}/stack-java-17 BUILD_DIR=${ROOT_DIR}/build-java-17 bash $PROG_DIR/create-one.sh
-
+STACK_DIR=${ROOT_DIR}/stack-java-21 BUILD_DIR=${ROOT_DIR}/build-java-21 bash $PROG_DIR/create-one.sh

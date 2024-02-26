@@ -12,6 +12,7 @@ readonly OUTPUT_DIR_NODEJS20="${STACK_DIR}/build-nodejs-20"
 readonly OUTPUT_DIR_JAVA8="${STACK_DIR}/build-java-8"
 readonly OUTPUT_DIR_JAVA11="${STACK_DIR}/build-java-11"
 readonly OUTPUT_DIR_JAVA17="${STACK_DIR}/build-java-17"
+readonly OUTPUT_DIR_JAVA21="${STACK_DIR}/build-java-21"
 
 # shellcheck source=SCRIPTDIR/.util/tools.sh
 source "${PROG_DIR}/.util/tools.sh"
@@ -56,6 +57,7 @@ function main() {
     rm -rf "${OUTPUT_DIR_JAVA8}"
     rm -rf "${OUTPUT_DIR_JAVA11}"
     rm -rf "${OUTPUT_DIR_JAVA17}"    
+    rm -rf "${OUTPUT_DIR_JAVA21}"
   fi
 
   if ! [[ -f "${OUTPUT_DIR}/build.oci" ]] || \
@@ -65,7 +67,8 @@ function main() {
      ! [[ -f "${OUTPUT_DIR_NODEJS20}/run.oci" ]] || \
      ! [[ -f "${OUTPUT_DIR_JAVA8}/run.oci" ]]  || \
      ! [[ -f "${OUTPUT_DIR_JAVA11}/run.oci" ]]  || \
-     ! [[ -f "${OUTPUT_DIR_JAVA17}/run.oci" ]]; then
+     ! [[ -f "${OUTPUT_DIR_JAVA17}/run.oci" ]]  || \
+     ! [[ -f "${OUTPUT_DIR_JAVA21}/run.oci" ]]; then
     util::print::title "Creating stack..."
     "${STACK_DIR}/scripts/create.sh"
   fi
@@ -93,6 +96,8 @@ and
 ${STACK_DIR}/build-java-11/run.oci
 and
 ${STACK_DIR}/build-java-17/run.oci
+and
+${STACK_DIR}/build-java-21/run.oci
 if they exist. Otherwise, first runs create.sh to create them.
 
 OPTIONS
