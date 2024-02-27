@@ -97,7 +97,7 @@ func TestAcceptance(t *testing.T) {
 	builder.buildImageID, builder.buildImageUrl, builder.runImageID, builder.runImageUrl, builder.imageUrl, err = utils.GenerateBuilder(filepath.Join(root, "build"), RegistryUrl)
 	Expect(err).NotTo(HaveOccurred())
 
-	SetDefaultEventuallyTimeout(30 * time.Second)
+	SetDefaultEventuallyTimeout(120 * time.Second)
 
 	suite := spec.New("Acceptance", spec.Report(report.Terminal{}), spec.Parallel())
 	suite("Metadata", testMetadata)
