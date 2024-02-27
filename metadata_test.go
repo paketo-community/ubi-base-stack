@@ -193,9 +193,9 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 					HaveKeyWithValue("io.buildpacks.stack.metadata", MatchJSON("{}")),
 				))
 
-				runNodejsReleaseDate, err := time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
+				runImageReleaseDate, err := time.Parse(time.RFC3339, file.Config.Labels["io.buildpacks.stack.released"])
 				Expect(err).NotTo(HaveOccurred())
-				Expect(runNodejsReleaseDate).NotTo(BeZero())
+				Expect(runImageReleaseDate).NotTo(BeZero())
 
 				Expect(file.Config.User).To(Equal("1001:1000"))
 
