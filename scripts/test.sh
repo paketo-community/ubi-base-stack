@@ -21,8 +21,14 @@ source "${PROG_DIR}/.util/tools.sh"
 source "${PROG_DIR}/.util/print.sh"
 
 function main() {
-  local clean
+  local clean token
   clean="false"
+  token=""
+
+  local regport create_registry
+  regport=""
+  create_registry="true"
+
   while [[ "${#}" != 0 ]]; do
     case "${1}" in
       --help|-h)
@@ -36,6 +42,16 @@ function main() {
         clean="true"
         ;;
 
+      --token|-t)
+        token="${2}"
+        shift 2
+        ;;
+
+    --regport | -p)
+      regport="${2}"
+      shift 2
+      ;;
+
       "")
         # skip if the argument is empty
         shift 1
@@ -46,7 +62,7 @@ function main() {
     esac
   done
 
-  tools::install
+  tools::install "${token}"
 
   if [[ "${clean}" == "true" ]]; then
     util::print::title "Cleaning up preexisting stack archives..."
@@ -73,7 +89,21 @@ function main() {
     "${STACK_DIR}/scripts/create.sh"
   fi
 
-  tests::run
+  if [[ -z "${regport:-}" ]]; then
+    regport="5000"
+  fi
+
+  util::print::title "Setting up local registry"
+
+  registry_container_id=$(util::tools::setup_local_registry "$regport")
+
+  export REGISTRY_URL="localhost:${regport}"
+
+  pack config experimental true
+
+  tests::run "${registry_container_id}"
+
+  util::tools::cleanup_local_registry "${registry_container_id}"
 }
 
 function usage() {
@@ -101,33 +131,71 @@ ${STACK_DIR}/build-java-21/run.oci
 if they exist. Otherwise, first runs create.sh to create them.
 
 OPTIONS
-  --clean  -c  clears contents of stack output directory before running tests
-  --help   -h  prints the command usage
+  --clean          -c  clears contents of stack output directory before running tests
+  --regport <port> -p  Local port to use for local registry during tests, defaults to 5000
+  --token <token>  -t  Token used to download assets from GitHub (e.g. jam, pack, etc) (optional)
+  --help           -h  prints the command usage
 USAGE
 }
 
 function tools::install() {
+  local token
+  token="${1}"
+
   util::tools::jam::install \
-    --directory "${STACK_DIR}/.bin"
+    --directory "${STACK_DIR}/.bin" \
+    --token "${token}"
 
   util::tools::pack::install \
-    --directory "${STACK_DIR}/.bin"
+    --directory "${STACK_DIR}/.bin" \
+    --token "${token}"
 
   util::tools::skopeo::check
 }
 
 function tests::run() {
+  local registry_container_id
+  registry_container_id="${1}"
+
   util::print::title "Run Stack Acceptance Tests"
 
+  export CGO_ENABLED=0
   testout=$(mktemp)
   pushd "${STACK_DIR}" > /dev/null
     if GOMAXPROCS="${GOMAXPROCS:-4}" go test -count=1 -timeout 0 ./... -v -run Acceptance | tee "${testout}"; then
       util::tools::tests::checkfocus "${testout}"
+      util::tools::cleanup_local_registry "${registry_container_id}"
       util::print::success "** GO Test Succeeded **"
     else
+      util::tools::cleanup_local_registry "${registry_container_id}"
       util::print::error "** GO Test Failed **"
     fi
   popd > /dev/null
+}
+
+
+function util::tools::setup_local_registry() {
+
+  registry_port="${1}"
+
+  local registry_container_id
+  if [[ "$(curl -s -o /dev/null -w "%{http_code}" localhost:$registry_port/v2/)" == "200" ]]; then
+    registry_container_id=""
+  else
+    registry_container_id=$(docker run -d -p "${registry_port}:5000" --restart=always registry:2)
+  fi
+
+  echo $registry_container_id
+}
+
+function util::tools::cleanup_local_registry() {
+  local registry_container_id
+  registry_container_id="${1}"
+
+  if [[ -n "${registry_container_id}" ]]; then
+    docker stop $registry_container_id
+    docker rm $registry_container_id
+  fi
 }
 
 main "${@:-}"
