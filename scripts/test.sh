@@ -89,8 +89,6 @@ function main() {
     "${STACK_DIR}/scripts/create.sh"
   fi
 
-  util::print::title "Setting up local registry"
-
   if [[ -z "${regport:-}" ]]; then
     regport="5000"
   fi

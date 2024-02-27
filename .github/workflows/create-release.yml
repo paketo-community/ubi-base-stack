@@ -850,7 +850,7 @@ jobs:
                 "path": "build-java-21/run.oci.sha256",
                 "name": ($repo + "-" + $tag + "-" + "run-java-21.oci.sha256"),
                 "content_type": "application/gzip"
-              },                     
+              },
               {
                 "path": "build-java-21/run.oci",
                 "name": ($repo + "-" + $tag + "-" + "run-java-21.oci"),
