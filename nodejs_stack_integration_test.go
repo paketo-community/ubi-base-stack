@@ -69,7 +69,7 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 			// Create a copy of the stack to get the value and instead of the pointer
 			stack := stack
 			it(fmt.Sprintf("it successfully builds an app using Nodejs %d run image", stack.MajorVersion), func() {
-				runArchive := filepath.Join(stack.AbsPath, "run.oci")
+				runArchive := filepath.Join(root, stack.Path, "run.oci")
 				bpUbiRunImageOverrideImageID, err = utils.PushFileToLocalRegistry(runArchive, RegistryUrl, fmt.Sprintf("run-%s-%d-%s", stack.Engine, stack.MajorVersion, uuid.NewString()))
 				Expect(err).NotTo(HaveOccurred())
 

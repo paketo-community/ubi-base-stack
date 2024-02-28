@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	structs "github.com/paketo-community/ubi-base-stack/internal/structs"
 	utils "github.com/paketo-community/ubi-base-stack/internal/utils"
 	"github.com/sclevine/spec"
 
@@ -62,7 +61,7 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 		})
 
 		it("should successfully build a go app", func() {
-			buildImageID, _, runImageID, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(filepath.Join(root, "build"), RegistryUrl)
+			buildImageID, _, runImageID, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(root, "build", RegistryUrl)
 			Expect(err).NotTo(HaveOccurred())
 
 			image, _, err = pack.WithNoColor().Build.
@@ -94,7 +93,7 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 		})
 	})
 
-	context("When building an app using nodejs stacks", func() {
+	context("When building an app using Node.js stacks", func() {
 
 		it.After(func() {
 			Expect(docker.Container.Remove.Execute(container.ID)).To(Succeed())
@@ -113,17 +112,11 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		var stacks []structs.Stack
-
-		for _, nodeMajorVersion := range settings.Config.NodeMajorVersions {
-			stacks = append(stacks, structs.NewStack(nodeMajorVersion, "nodejs", root))
-		}
-
-		for _, stack := range stacks {
+		for _, stack := range settings.Stacks {
 			// Create a copy of the stack to get the value instead of a pointer
 			stack := stack
 			it(fmt.Sprintf("it should successfully build a nodejs app with node version %d", stack.MajorVersion), func() {
-				buildImageID, _, runImageID, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(stack.AbsPath, RegistryUrl)
+				buildImageID, _, runImageID, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(root, stack.Path, RegistryUrl)
 				Expect(err).NotTo(HaveOccurred())
 
 				image, _, err = pack.WithNoColor().Build.
@@ -151,7 +144,9 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 
 				Eventually(container).Should(BeAvailable())
 				Eventually(container).Should(Serve(MatchRegexp(`go1.*`)).OnPort(8080))
-				Eventually(container).Should(Serve(MatchRegexp(fmt.Sprintf(`v%d.*`, stack.MajorVersion))).OnPort(8080).WithEndpoint("/node/version"))
+
+				engineVersionEndpoint := fmt.Sprintf("/nodejs/v%d/version", stack.MajorVersion)
+				Eventually(container).Should(Serve(MatchRegexp(fmt.Sprintf(`v%d.*`, stack.MajorVersion))).OnPort(8080).WithEndpoint(engineVersionEndpoint))
 			})
 		}
 	})

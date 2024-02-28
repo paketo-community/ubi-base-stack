@@ -13,9 +13,9 @@ import (
 	"github.com/paketo-buildpacks/packit/v2/pexec"
 )
 
-func GenerateBuilder(stackPath string, registryUrl string) (buildImageID string, buildImageUrl string, runImageID string, runImageUrl string, builderImageUrl string, err error) {
+func GenerateBuilder(rootDir string, stackPath string, registryUrl string) (buildImageID string, buildImageUrl string, runImageID string, runImageUrl string, builderImageUrl string, err error) {
 
-	buildArchive := filepath.Join(stackPath, "build.oci")
+	buildArchive := filepath.Join(rootDir, "build", "build.oci")
 	buildImageID = fmt.Sprintf("build-image-%s", uuid.NewString())
 	err = archiveToDaemon(buildArchive, buildImageID)
 	if err != nil {
@@ -27,7 +27,7 @@ func GenerateBuilder(stackPath string, registryUrl string) (buildImageID string,
 		return "", "", "", "", "", err
 	}
 
-	runArchive := filepath.Join(stackPath, "run.oci")
+	runArchive := filepath.Join(rootDir, stackPath, "run.oci")
 	runImageID = fmt.Sprintf("run-image-%s", uuid.NewString())
 	err = archiveToDaemon(runArchive, runImageID)
 	if err != nil {
