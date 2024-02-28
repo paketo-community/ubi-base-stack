@@ -2,7 +2,7 @@ name: Create Release
 
 on:
   schedule:
-    - cron: "*/30 * * * *"  # every 30 minutes
+    - cron: "*/30 * * * *" # every 30 minutes
   push:
     branches:
       - main
@@ -43,7 +43,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Find and Download Previous build sha256 image hash code
         id: fetch_previous_build_sha256_image_hash_code
@@ -292,7 +292,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Create stack
         id: create-stack
@@ -301,7 +301,7 @@ jobs:
 
       ## build image
       - name: Upload build image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-build-image
           path: ./build/build.oci
@@ -319,14 +319,14 @@ jobs:
             done
 
       - name: Upload build image hash code
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-build-image-hash-code
           path: hash-codes/build/build.oci.sha256
 
       ## run image
       - name: Upload run image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-run-image
           path: ./build/run.oci
@@ -344,14 +344,14 @@ jobs:
           done
 
       - name: Upload run image hash code
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-run-image-hash-code
           path: hash-codes/build/run.oci.sha256
 
       ## nodejs 16 run image
       - name: Upload nodejs 16 run image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-nodejs-16-run-image
           path: ./build-nodejs-16/run.oci
@@ -369,14 +369,14 @@ jobs:
           done
 
       - name: Upload nodejs 16 run image hash code
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-nodejs-16-run-image-hash-code
           path: hash-codes/build-nodejs-16/run.oci.sha256
 
       ## nodejs 18 run image
       - name: Upload nodejs 18 run image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-nodejs-18-run-image
           path: ./build-nodejs-18/run.oci
@@ -394,14 +394,14 @@ jobs:
           done
 
       - name: Upload nodejs 18 run image hash code
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-nodejs-18-run-image-hash-code
           path: hash-codes/build-nodejs-18/run.oci.sha256
 
       ## nodejs 20 run image
       - name: Upload nodejs 20 run image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-nodejs-20-run-image
           path: ./build-nodejs-20/run.oci
@@ -419,14 +419,14 @@ jobs:
           done
 
       - name: Upload nodejs 20 run image hash code
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-nodejs-20-run-image-hash-code
           path: hash-codes/build-nodejs-20/run.oci.sha256
 
       ## java 8 run image
       - name: Upload java 8 run image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-java-8-run-image
           path: ./build-java-8/run.oci
@@ -444,14 +444,14 @@ jobs:
           done
 
       - name: Upload java 8 run image hash code
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-java-8-run-image-hash-code
           path: hash-codes/build-java-8/run.oci.sha256
 
       ## java 11 run image
       - name: Upload java 11 run image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-java-11-run-image
           path: ./build-java-11/run.oci
@@ -469,14 +469,14 @@ jobs:
           done
 
       - name: Upload java 11 run image hash code
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-java-11-run-image-hash-code
           path: hash-codes/build-java-11/run.oci.sha256
 
       ## java 17 run image
       - name: Upload java 17 run image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-java-17-run-image
           path: ./build-java-17/run.oci
@@ -494,14 +494,14 @@ jobs:
           done
 
       - name: Upload java 17 run image hash code
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-java-17-run-image-hash-code
           path: hash-codes/build-java-17/run.oci.sha256
 
       ## java 21 run image
       - name: Upload java 21 run image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-java-21-run-image
           path: ./build-java-21/run.oci
@@ -519,7 +519,7 @@ jobs:
           done
 
       - name: Upload java 21 run image hash code
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: current-java-21-run-image-hash-code
           path: hash-codes/build-java-21/run.oci.sha256
@@ -530,12 +530,12 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Setup Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
-          go-version: 1.20.x
+          go-version: "stable"
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Create OCI artifacts destination directory
         run: |
@@ -549,55 +549,55 @@ jobs:
           mkdir -p build-java-21
 
       - name: Download Build Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-build-image
           path: build
 
       - name: Download Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-run-image
           path: build
 
       - name: Download nodejs-16 Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-nodejs-16-run-image
           path: build-nodejs-16
 
       - name: Download nodejs-18 Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-nodejs-18-run-image
           path: build-nodejs-18
 
       - name: Download nodejs-20 Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-nodejs-20-run-image
           path: build-nodejs-20
 
       - name: Download java-8 Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-java-8-run-image
           path: build-java-8
 
       - name: Download java-11 Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-java-11-run-image
           path: build-java-11
 
       - name: Download java-17 Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-java-17-run-image
           path: build-java-17
 
       - name: Download java-21 Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-java-21-run-image
           path: build-java-21
@@ -626,114 +626,114 @@ jobs:
           printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # gets full history
+          fetch-depth: 0 # gets full history
 
       - name: Download Build Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-build-image
           path: build
 
       - name: Download Build Image hash code
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-build-image-hash-code
           path: build
 
       - name: Download Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-run-image
           path: build
 
       - name: Download Run Image hash code
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-run-image-hash-code
           path: build
 
       - name: Download nodejs-16 Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-nodejs-16-run-image
           path: build-nodejs-16
 
       - name: Download nodejs-16 Run Image hash code
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-nodejs-16-run-image-hash-code
           path: build-nodejs-16
 
       - name: Download nodejs-18 Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-nodejs-18-run-image
           path: build-nodejs-18
 
       - name: Download nodejs-18 Run Image hash code
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-nodejs-18-run-image-hash-code
           path: build-nodejs-18
 
       - name: Download nodejs-20 Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-nodejs-20-run-image
           path: build-nodejs-20
 
       - name: Download nodejs-20 Run Image hash code
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-nodejs-20-run-image-hash-code
           path: build-nodejs-20
 
       - name: Download java-8 Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-java-8-run-image
           path: build-java-8
 
       - name: Download java-8 Run Image hash code
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-java-8-run-image-hash-code
           path: build-java-8
 
       - name: Download java-11 Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-java-11-run-image
           path: build-java-11
 
       - name: Download java-11 Run Image hash code
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-java-11-run-image-hash-code
           path: build-java-11
 
       - name: Download java-17 Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-java-17-run-image
           path: build-java-17
 
       - name: Download java-17 Run Image hash code
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-java-17-run-image-hash-code
           path: build-java-17
 
       - name: Download java-21 Run Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-java-21-run-image
           path: build-java-21
 
       - name: Download java-21 Run Image hash code
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: current-java-21-run-image-hash-code
           path: build-java-21
