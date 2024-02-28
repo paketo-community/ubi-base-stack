@@ -16,7 +16,7 @@ import (
 func GenerateBuilder(stackPath string, registryUrl string) (buildImageID string, buildImageUrl string, runImageID string, runImageUrl string, builderImageUrl string, err error) {
 
 	buildArchive := filepath.Join(stackPath, "build.oci")
-	buildImageID = fmt.Sprintf("build-nodejs-%s", uuid.NewString())
+	buildImageID = fmt.Sprintf("build-image-%s", uuid.NewString())
 	err = archiveToDaemon(buildArchive, buildImageID)
 	if err != nil {
 		return "", "", "", "", "", err
@@ -28,11 +28,12 @@ func GenerateBuilder(stackPath string, registryUrl string) (buildImageID string,
 	}
 
 	runArchive := filepath.Join(stackPath, "run.oci")
-	runImageID = fmt.Sprintf("run-nodejs-%s", uuid.NewString())
+	runImageID = fmt.Sprintf("run-image-%s", uuid.NewString())
 	err = archiveToDaemon(runArchive, runImageID)
 	if err != nil {
 		return "", "", "", "", "", err
 	}
+
 	runImageUrl, err = PushFileToLocalRegistry(runArchive, registryUrl, runImageID)
 	if err != nil {
 		return "", "", "", "", "", err

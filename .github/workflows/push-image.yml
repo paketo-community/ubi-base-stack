@@ -26,7 +26,7 @@ jobs:
         echo "run_java_21_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run-java-21.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
 
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Download Build Image
       uses: paketo-buildpacks/github-config/actions/release/download-asset@main
