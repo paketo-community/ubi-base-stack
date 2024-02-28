@@ -11,7 +11,6 @@ type Stack struct {
 	Engine       string
 }
 
-// Create a factory for the stack struct
 func NewStack(majorVersion int, engine string, rootDir string) Stack {
 	return Stack{
 		MajorVersion: majorVersion,

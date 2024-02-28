@@ -120,7 +120,7 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 		}
 
 		for _, stack := range stacks {
-			// Create a copy of the stack to get the value and instead of the pointer
+			// Create a copy of the stack to get the value instead of a pointer
 			stack := stack
 			it(fmt.Sprintf("it should successfully build a nodejs app with node version %d", stack.MajorVersion), func() {
 				buildImageID, _, runImageID, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(stack.AbsPath, RegistryUrl)

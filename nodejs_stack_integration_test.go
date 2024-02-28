@@ -29,7 +29,6 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 		source string
 		name   string
 
-		// These variables probably are not being used
 		image     occam.Image
 		container occam.Container
 
