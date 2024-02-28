@@ -16,3 +16,5 @@ you may need to [submit an RFC](https://github.com/paketo-buildpacks/rfcs) first
 
 ### How do I test the stack locally?
 Run [`scripts/test.sh`](scripts/test.sh).
+
+test
