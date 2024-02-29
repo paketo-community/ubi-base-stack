@@ -15,7 +15,7 @@ func main() {
 		fmt.Fprintln(w, runtime.Version())
 	})
 
-	http.HandleFunc("/node/version", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/nodejs/version", func(w http.ResponseWriter, r *http.Request) {
 
 		cmd := exec.Command("node", "--version")
 

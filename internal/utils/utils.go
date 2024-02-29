@@ -13,10 +13,10 @@ import (
 	"github.com/paketo-buildpacks/packit/v2/pexec"
 )
 
-func GenerateBuilder(stackPath string, registryUrl string) (buildImageID string, buildImageUrl string, runImageID string, runImageUrl string, builderImageUrl string, err error) {
+func GenerateBuilder(rootDir string, stackPath string, registryUrl string) (buildImageID string, buildImageUrl string, runImageID string, runImageUrl string, builderImageUrl string, err error) {
 
-	buildArchive := filepath.Join(stackPath, "build.oci")
-	buildImageID = fmt.Sprintf("build-nodejs-%s", uuid.NewString())
+	buildArchive := filepath.Join(rootDir, "build", "build.oci")
+	buildImageID = fmt.Sprintf("build-image-%s", uuid.NewString())
 	err = archiveToDaemon(buildArchive, buildImageID)
 	if err != nil {
 		return "", "", "", "", "", err
@@ -27,12 +27,13 @@ func GenerateBuilder(stackPath string, registryUrl string) (buildImageID string,
 		return "", "", "", "", "", err
 	}
 
-	runArchive := filepath.Join(stackPath, "run.oci")
-	runImageID = fmt.Sprintf("run-nodejs-%s", uuid.NewString())
+	runArchive := filepath.Join(rootDir, stackPath, "run.oci")
+	runImageID = fmt.Sprintf("run-image-%s", uuid.NewString())
 	err = archiveToDaemon(runArchive, runImageID)
 	if err != nil {
 		return "", "", "", "", "", err
 	}
+
 	runImageUrl, err = PushFileToLocalRegistry(runArchive, registryUrl, runImageID)
 	if err != nil {
 		return "", "", "", "", "", err

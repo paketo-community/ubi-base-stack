@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/paketo-buildpacks/occam"
+	structs "github.com/paketo-community/ubi-base-stack/internal/structs"
 	utils "github.com/paketo-community/ubi-base-stack/internal/utils"
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
@@ -52,11 +53,17 @@ var settings struct {
 		GoDist             string `json:"go-dist"`
 		NodeMajorVersions  []int  `json:"nodejs-major-versions"`
 	}
+
+	Stacks []structs.Stack
 }
 
 func by(_ string, f func()) { f() }
 
 func TestAcceptance(t *testing.T) {
+
+	for _, nodeMajorVersion := range settings.Config.NodeMajorVersions {
+		settings.Stacks = append(settings.Stacks, structs.NewStack(nodeMajorVersion, "nodejs", root))
+	}
 
 	var err error
 	Expect := NewWithT(t).Expect
@@ -81,7 +88,6 @@ func TestAcceptance(t *testing.T) {
 		Execute(settings.Config.UbiNodejsExtension)
 	Expect(err).ToNot(HaveOccurred())
 
-
 	settings.Buildpacks.Nodejs.Online, err = buildpackStore.Get.
 		Execute(settings.Config.Nodejs)
 	Expect(err).ToNot(HaveOccurred())
@@ -94,7 +100,7 @@ func TestAcceptance(t *testing.T) {
 		Execute(settings.Config.GoDist)
 	Expect(err).NotTo(HaveOccurred())
 
-	builder.buildImageID, builder.buildImageUrl, builder.runImageID, builder.runImageUrl, builder.imageUrl, err = utils.GenerateBuilder(filepath.Join(root, "build"), RegistryUrl)
+	builder.buildImageID, builder.buildImageUrl, builder.runImageID, builder.runImageUrl, builder.imageUrl, err = utils.GenerateBuilder(root, "build", RegistryUrl)
 	Expect(err).NotTo(HaveOccurred())
 
 	SetDefaultEventuallyTimeout(120 * time.Second)
