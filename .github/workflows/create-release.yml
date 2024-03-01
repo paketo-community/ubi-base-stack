@@ -852,16 +852,6 @@ jobs:
                 "content_type": "application/gzip"
               },
               {
-                "path": "build-java-21/run.oci",
-                "name": ($repo + "-" + $tag + "-" + "run-java-21.oci"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build-java-21/run.oci.sha256",
-                "name": ($repo + "-" + $tag + "-" + "run-java-21.oci.sha256"),
-                "content_type": "application/gzip"
-              },
-              {
                 "path": "build-nodejs-16/run.oci",
                 "name": ($repo + "-" + $tag + "-" + "run-nodejs-16.oci"),
                 "content_type": "application/gzip"
