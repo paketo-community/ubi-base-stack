@@ -99,8 +99,6 @@ function main() {
 
   export REGISTRY_URL="localhost:${regport}"
 
-  pack config experimental true
-
   tests::run "${registry_container_id}"
 
   util::tools::cleanup_local_registry "${registry_container_id}"
