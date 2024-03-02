@@ -49,3 +49,4 @@ function util::print::warn() {
   echo -e "${yellow}${message}${reset}" >&2
   exit 0
 }
+
