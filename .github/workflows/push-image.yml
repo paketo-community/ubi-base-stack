@@ -43,6 +43,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: preparation
     strategy:
+      max-parallel: 4
       matrix:
         oci_image: ${{ fromJSON(needs.preparation.outputs.matrix) }}
 
