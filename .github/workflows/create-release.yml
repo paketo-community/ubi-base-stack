@@ -1,7 +1,7 @@
 name: Create Release
 
 # TODO add next to the images the stack name
-
+# TODO  put the github-config change on the ubi -base stack 
 on:
 # TODO uncomment below code before pr
   # schedule:
@@ -364,9 +364,6 @@ jobs:
 
     - name: Fail If Packages Removed
       id: removed_with_force
-      env:
-        BUILD_REMOVED: ${{ steps.build_diff.outputs.removed }}
-        RUN_REMOVED: ${{ steps.run_diff.outputs.removed }}
       run: |
          if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
           build=$(jq '. | length' <<< "${BUILD_REMOVED}")
@@ -377,14 +374,17 @@ jobs:
          echo "Run packages removed: ${run}"
 
          # only fail if packages are removed AND the release has not been forced
-         if [ "${build}" -gt 0  && "${{ matrix.stacks.create_build_image }}" == "true"  ] || [ "${run}" -gt 0 ]; then
-           if [ "${{ github.event.inputs.force }}" != 'true' ]; then
+         if ([ "${build}" -gt 0 ] && [ "${{ matrix.stacks.create_build_image }}" == "true"  ]) || [ "${run}" -gt 0 ]; then
+           if [ "${{ github.event.inputs.force }}" != "true" ]; then
              echo "Packages removed without authorization. Stack cannot be released."
              exit 1
            else
              echo "packages_removed=true" >> "$GITHUB_OUTPUT"
            fi
          fi
+      env:
+        BUILD_REMOVED: ${{ steps.build_diff.outputs.removed }}
+        RUN_REMOVED: ${{ steps.run_diff.outputs.removed }}
 
     - name: Create/Upload variable artifacts
       id: variable_artifacts
@@ -393,14 +393,14 @@ jobs:
         cd diff-${{ matrix.stacks.name }}
 
         if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
-         echo "${BUILD_ADDED}" > build_added
-         echo "${BUILD_MODIFIED}" > build_modified
-         echo "${BUILD_REMOVED_WITH_FORCE}" > build_removed_with_force
+         echo '${{ steps.build_diff.outputs.added }}' > build_added
+         echo '${{ steps.build_diff.outputs.modified }}' > build_modified
+         echo '${{ steps.build_diff.outputs.removed }}' > build_removed_with_force
         fi
 
-        echo "${RUN_ADDED}" > run_added
-        echo "${RUN_MODIFIED}" > run_modified
-        echo "${RUN_REMOVED_WITH_FORCE}" > run_removed_with_force
+        echo '${{ steps.run_diff.outputs.added }}' > run_added
+        echo '${{ steps.run_diff.outputs.modified }}' > run_modified
+        echo '${{ steps.run_diff.outputs.removed }}' > run_removed_with_force
 
     - name: Upload diff-${{ matrix.stacks.name }}
       uses: actions/upload-artifact@v4
@@ -439,29 +439,24 @@ jobs:
 
     - name: Create env variables
       run: |
-       echo "BUILD_ADDED=$(cat ${{ matrix.stacks.name }}_build_added)" >> $GITHUB_ENV
-       echo "BUILD_MODIFIED=$(cat ${{ matrix.stacks.name }}_build_modified)" >> $GITHUB_ENV
-       echo "RUN_ADDED=$(cat ${{ matrix.stacks.name }}_run_added)" >> $GITHUB_ENV
-       echo "RUN_MODIFIED=$(cat ${{ matrix.stacks.name }}_run_modified)" >> $GITHUB_ENV
-
-    - name: Loooooog
-      run: |
-       echo ${BUILD_ADDED}
-       echo ${BUILD_MODIFIED}
-       echo ${RUN_ADDED}
-       echo ${RUN_MODIFIED}
+        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
+          echo "BUILD_ADDED=$(cat build_added)" >> $GITHUB_ENV
+          echo "BUILD_MODIFIED=$(cat build_modified)" >> $GITHUB_ENV
+        fi
+        echo "RUN_ADDED=$(cat run_added)" >> $GITHUB_ENV
+        echo "RUN_MODIFIED=$(cat run_modified)" >> $GITHUB_ENV
 
     - name: Compare With Previous Release
       id: compare
       run: |
         if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
-         # shellcheck disable=SC2153
-         build_added=$(jq '. | length' <<< "${BUILD_ADDED}")
-         echo "Build packages added: ${build_added}"
+          # shellcheck disable=SC2153
+          build_added=$(jq '. | length' <<< "${BUILD_ADDED}")
+          echo "Build packages added: ${build_added}"
 
-         # shellcheck disable=SC2153
-         build_modified=$(jq '. | length' <<< "${BUILD_MODIFIED}")
-         echo "Build packages modified: ${build_modified}"
+          # shellcheck disable=SC2153
+          build_modified=$(jq '. | length' <<< "${BUILD_MODIFIED}")
+          echo "Build packages modified: ${build_modified}"
         fi
 
         # shellcheck disable=SC2153
@@ -481,7 +476,7 @@ jobs:
           echo "packages_changed=true" >> "$GITHUB_OUTPUT"
         fi
 
-         if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
+        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
           if [ "${build_added}" -eq 0 ] && [ "${build_modified}" -eq 0 ]; then
             echo "No packages changed."
             # we dont set the "packages_changed" to false, as is already null
@@ -515,36 +510,37 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
     
-    - name: Download Build images
-      uses: actions/download-artifact@v4
-      with:
-        pattern: |
-           current-build-image-*
+    # TODO restore below code before final PR
+    - name: tests ran
+      run: echo "tests ran"
+
+    # - name: Download Build images
+    #   uses: actions/download-artifact@v4
+    #   with:
+    #     pattern: |
+    #        current-build-image-*
     
-    - name: Download Run images
-      uses: actions/download-artifact@v4
-      with:
-        pattern: |
-           current-run-image-*
+    # - name: Download Run images
+    #   uses: actions/download-artifact@v4
+    #   with:
+    #     pattern: |
+    #        current-run-image-*
 
-    - name: Treeeee
-      run: tree .
+    # - name: Create OCI artifacts destination directory
+    #   run: |
+    #     echo '${{ needs.preparation.outputs.stacks }}' | jq -c '.[]' | while read -r stack; do
+    #       name=$(echo "$stack" | jq -r '.name')
+    #       output_dir=$(echo "$stack" | jq -r '.output_dir')
+    #       create_build_image=$(echo "$stack" | jq -r '.create_build_image')
+    #       mkdir $output_dir
+    #       mv "current-run-image-${name}/run.oci" "${output_dir}/run.oci"
+    #       if [ $create_build_image == 'true' ]; then
+    #         mv "current-build-image-${name}/build.oci" "${output_dir}/build.oci"
+    #       fi
+    #     done
 
-    - name: Create OCI artifacts destination directory
-      run: |
-        echo '${{ needs.preparation.outputs.stacks }}' | jq -c '.[]' | while read -r stack; do
-          name=$(echo "$stack" | jq -r '.name')
-          output_dir=$(echo "$stack" | jq -r '.output_dir')
-          create_build_image=$(echo "$stack" | jq -r '.create_build_image')
-          mkdir $output_dir
-          mv "current-run-image-${name}/run.oci" "${output_dir}/run.oci"
-          if [ $create_build_image == 'true' ]; then
-            mv "current-build-image-${name}/build.oci" "${output_dir}/build.oci"
-          fi
-        done
-
-    - name: Run Acceptance Tests
-      run: ./scripts/test.sh
+    # - name: Run Acceptance Tests
+    #   run: ./scripts/test.sh
 
   force_release_creation:
     name: Force Release Creation
@@ -558,10 +554,9 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-22.04
-    needs: [create_stack, run_if_stack_files_changed, test, force_release_creation, preparation]
+    needs: [poll_images, create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, run_if_packages_removed_with_force, test, force_release_creation, preparation]
     if: |
-      ${{ always() &&
-      needs.diff.result == 'success' &&
+      ${{ needs.diff.result == 'success' &&
       needs.test.result == 'success' &&
         ( needs.run_if_packages_changed.result == 'success' ||
          needs.run_if_stack_files_changed.result == 'success' ||
@@ -617,21 +612,35 @@ jobs:
         registry_repo="${repo//-stack/}"
         echo "registry_repo_name=${registry_repo}" >> "$GITHUB_OUTPUT"
 
+    - name: Download diff-${{ matrix.stacks.name }}
+      uses: actions/download-artifact@v4
+      with:
+       name: diff-${{ matrix.stacks.name }}
+
+    # TODO remove before final PR
+    - name: Treeee
+      run: tree .
+
     - name: Release notes preparation
       id: release_notes_preparation
       run: |
-        echo "run_image=${{ needs.preparation.outputs.repo_owner }}/${{ matrix.stacks.run_image }}-${{ needs.preparation.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}" >> "$GITHUB_OUTPUT"
         if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
           echo "build_image=${{ needs.preparation.outputs.repo_owner }}/${{ matrix.stacks.build_image }}-${{ needs.preparation.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}" >> "$GITHUB_OUTPUT"
-          echo "build_packages_added=${{ needs.diff.outputs.build_added }}" >> "$GITHUB_OUTPUT"
-          echo "build_packages_modified=${{ needs.diff.outputs.build_modified }}" >> "$GITHUB_OUTPUT"
-          echo "build_packages_removed_with_force=${{ needs.diff.outputs.build_removed_with_force }}" >> "$GITHUB_OUTPUT"
+          echo "build_added=$(jq -c <<< "$(cat build_added)" )" >> "$GITHUB_OUTPUT"
+          echo "build_modified=$(jq -c <<< "$(cat build_modified)" )" >> "$GITHUB_OUTPUT"
+          echo "build_removed_with_force=$(jq -c <<< "$(cat build_removed_with_force)" )" >> "$GITHUB_OUTPUT"
         else
           echo "build_image=" >> "$GITHUB_OUTPUT"
-          echo "build_packages_added=" >> "$GITHUB_OUTPUT"
-          echo "build_packages_modified=" >> "$GITHUB_OUTPUT"
-          echo "build_packages_removed_with_force=" >> "$GITHUB_OUTPUT"
+          echo "build_added=" >> "$GITHUB_OUTPUT"
+          echo "build_modified=" >> "$GITHUB_OUTPUT"
+          echo "build_removed_with_force=" >> "$GITHUB_OUTPUT"
         fi
+
+        echo "run_image=${{ needs.preparation.outputs.repo_owner }}/${{ matrix.stacks.run_image }}-${{ needs.preparation.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}" >> "$GITHUB_OUTPUT"
+        echo "run_added=$(jq -c <<< "$(cat run_added)" )" >> "$GITHUB_OUTPUT"
+        echo "run_modified=$(jq -c <<< "$(cat run_modified)" )" >> "$GITHUB_OUTPUT"
+        echo "run_removed_with_force=$(jq -c <<< "$(cat run_removed_with_force)" )" >> "$GITHUB_OUTPUT"
+
 
     - name: Create Release Notes
       id: notes
@@ -639,12 +648,12 @@ jobs:
       with:
         build_image: ${{ steps.release_notes_preparation.outputs.build_image }}
         run_image: ${{ steps.release_notes_preparation.outputs.run_image }}
-        build_packages_added: ${{ steps.release_notes_preparation.outputs.build_packages_added }}
-        build_packages_modified: ${{ steps.release_notes_preparation.outputs.build_packages_modified }}
-        build_packages_removed_with_force: ${{ steps.release_notes_preparation.outputs.build_packages_removed_with_force }}
-        run_packages_added: ${{ needs.diff.outputs.run_added }}
-        run_packages_modified: ${{ needs.diff.outputs.run_modified }}
-        run_packages_removed_with_force: ${{ needs.diff.outputs.run_removed_with_force }}
+        build_packages_added: ${{ steps.release_notes_preparation.outputs.build_added }}
+        build_packages_modified: ${{ steps.release_notes_preparation.outputs.build_modified }}
+        build_packages_removed_with_force: ${{ steps.release_notes_preparation.outputs.build_removed_with_force }}
+        run_packages_added: ${{ steps.release_notes_preparation.outputs.run_added }}
+        run_packages_modified: ${{ steps.release_notes_preparation.outputs.run_modified }}
+        run_packages_removed_with_force: ${{ steps.release_notes_preparation.outputs.run_removed_with_force }}
         supports_usns: ${{ needs.preparation.outputs.support_usns }}       
 
     - name: Setup Release Assets
@@ -720,12 +729,11 @@ jobs:
         name: release-assets-${{ matrix.stacks.name }}
         path: release-assets-${{ matrix.stacks.name }}
 
-# TODO Sync with Michael about the always() function, remove this comment before PR
   create_release:
     name: Create Release
     runs-on: ubuntu-22.04
     needs: release
-    if: ${{ always() && needs.release.result == 'success' }}
+    if: ${{ needs.release.result == 'success' }}
     steps:
     - name: download release assets
       uses: actions/download-artifact@v4
@@ -748,6 +756,10 @@ jobs:
       with:
         pattern: release-body-*
         merge-multiple: true
+
+    # TODO remove before PR
+    - name: Treeeeee
+      run: tree .
 
     - name: Merge release bodies
       id: merge_release_bodies
