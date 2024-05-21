@@ -1,12 +1,11 @@
 name: Create Release
 
 on:
-# TODO uncomment below code before pr
-  # schedule:
-  #   - cron: "*/30 * * * *" # every 30 minutes
-  # push:
-  #   branches:
-  #     - main
+  schedule:
+    - cron: "*/30 * * * *" # every 30 minutes
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       version:
@@ -477,37 +476,36 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
     
-    # TODO restore below code before final PR
     - name: tests ran
       run: echo "tests ran"
 
-    # - name: Download Build images
-    #   uses: actions/download-artifact@v4
-    #   with:
-    #     pattern: |
-    #        current-build-image-*
+    - name: Download Build images
+      uses: actions/download-artifact@v4
+      with:
+        pattern: |
+           current-build-image-*
     
-    # - name: Download Run images
-    #   uses: actions/download-artifact@v4
-    #   with:
-    #     pattern: |
-    #        current-run-image-*
+    - name: Download Run images
+      uses: actions/download-artifact@v4
+      with:
+        pattern: |
+           current-run-image-*
 
-    # - name: Create OCI artifacts destination directory
-    #   run: |
-    #     echo '${{ needs.preparation.outputs.stacks }}' | jq -c '.[]' | while read -r stack; do
-    #       name=$(echo "$stack" | jq -r '.name')
-    #       output_dir=$(echo "$stack" | jq -r '.output_dir')
-    #       create_build_image=$(echo "$stack" | jq -r '.create_build_image')
-    #       mkdir $output_dir
-    #       mv "current-run-image-${name}/run.oci" "${output_dir}/run.oci"
-    #       if [ $create_build_image == 'true' ]; then
-    #         mv "current-build-image-${name}/build.oci" "${output_dir}/build.oci"
-    #       fi
-    #     done
+    - name: Create OCI artifacts destination directory
+      run: |
+        echo '${{ needs.preparation.outputs.stacks }}' | jq -c '.[]' | while read -r stack; do
+          name=$(echo "$stack" | jq -r '.name')
+          output_dir=$(echo "$stack" | jq -r '.output_dir')
+          create_build_image=$(echo "$stack" | jq -r '.create_build_image')
+          mkdir $output_dir
+          mv "current-run-image-${name}/run.oci" "${output_dir}/run.oci"
+          if [ $create_build_image == 'true' ]; then
+            mv "current-build-image-${name}/build.oci" "${output_dir}/build.oci"
+          fi
+        done
 
-    # - name: Run Acceptance Tests
-    #   run: ./scripts/test.sh
+    - name: Run Acceptance Tests
+      run: ./scripts/test.sh
 
   force_release_creation:
     name: Force Release Creation
@@ -598,10 +596,9 @@ jobs:
         echo "run_removed_with_force=$(jq -c <<< "$(cat run_removed_with_force)" )" >> "$GITHUB_OUTPUT"
 
 
-    # TODO replace pacostas with the one from ubi-base-stack
     - name: Create Release Notes
       id: notes
-      uses: pacostas/ubi-base-stack/actions/stack/release-notes@main
+      uses: paketo-community/ubi-base-stack/actions/stack/release-notes@main
       with:
         build_image: ${{ steps.release_notes_preparation.outputs.build_image }}
         run_image: ${{ steps.release_notes_preparation.outputs.run_image }}
