@@ -556,12 +556,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [poll_images, create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, run_if_packages_removed_with_force, test, force_release_creation, preparation]
     if: |
-      ${{ needs.diff.result == 'success' &&
-      needs.test.result == 'success' &&
-        ( needs.run_if_packages_changed.result == 'success' ||
-         needs.run_if_stack_files_changed.result == 'success' ||
-         needs.force_release_creation.result == 'success' )
-      }}
+      ${{ needs.diff.result == 'success' && needs.test.result == 'success' && ( needs.run_if_packages_changed.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
     strategy:
       matrix:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
@@ -570,8 +565,8 @@ jobs:
     steps:
     - name: Print Release Reasoning
       run: |
+        printf "Diff Packages: %s\n" "${{ needs.diff.result }}"
         printf "Acceptance Tests: %s\n" "${{ needs.test.result }}"
-        printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
         printf "Run If Packages Changed: %s\n" "${{ needs.run_if_packages_changed.result }}"
         printf "Run If Packages Removed With Force: %s\n" "${{ needs.run_if_packages_removed_with_force.result }}"
         printf "Run If Stack Files Changed: %s\n" "${{ needs.run_if_stack_files_changed.result }}"
