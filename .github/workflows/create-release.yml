@@ -12,20 +12,19 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version of the release to cut (e.g. 1.2.3). No leading v"
+        description: 'Version of the release to cut (e.g. 1.2.3). No leading v'
         required: false
       force:
-        description: "Release stack even if change validator does not detect changes, or a package is removed"
+        description: 'Release stack even if change validator does not detect changes, or a package is removed'
         required: true
         type: choice
-        default: "false"
+        default: 'false'
         options:
-          - "true"
-          - "false"
+        - 'true'
+        - 'false'
 
 concurrency: release
 env:
-  RECEIPT_FILENAME_SUFFIX: "receipt.cyclonedx.json"
   STACKS_FILENAME: "images.json"
 
 jobs:
@@ -123,9 +122,6 @@ jobs:
         output_path: "/github/workspace/previous_${{ matrix.stacks.run_image }}.oci.sha256"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
-    - name: Treeee
-      run: tree .
-
     - name: Get current run image hascode of ${{ matrix.stacks.name }} stack
       run: |
         skopeo inspect --format "{{.Digest}}" ${{ matrix.stacks.base_run_container_image }} > hash-code-current-run-image-${{ matrix.stacks.name }}
@@ -134,9 +130,6 @@ jobs:
       if: ${{ matrix.stacks.create_build_image == true }}
       run: |
         skopeo inspect --format "{{.Digest}}" ${{ matrix.stacks.base_build_container_image }} > hash-code-current-build-image-${{ matrix.stacks.name }}
-
-    - name: Treeee
-      run: tree .
 
     - name: Upload run image hash code
       uses: actions/upload-artifact@v4
@@ -209,27 +202,19 @@ jobs:
     name: Create Stack
     needs: [ poll_images, preparation ] 
     if: ${{ ! ( needs.poll_images.outputs.images_need_update == null &&  github.event_name == 'schedule' ) }}
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
-    runs-on: ubuntu-22.04
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-
-    # TODO remove before PR
-    - name: Tree
-      run: tree .
 
     - name: Create stack ${{ matrix.stacks.name }}
       id: create-stack
       run: |
         scripts/create.sh --stack-dir ${{ matrix.stacks.config_dir }} \
                           --build-dir ${{ matrix.stacks.output_dir }}
-
-    # TODO remove before PR
-    - name: Tree
-      run: tree .
 
     - name: Generate Package Receipts
       id: receipts
@@ -240,10 +225,6 @@ jobs:
                             --run-receipt current-run-receipt-${{ matrix.stacks.name }}
         echo "build_receipt=current-build-receipt-${{ matrix.stacks.name }}" >> "$GITHUB_OUTPUT"
         echo "run_receipt=current-run-receipt-${{ matrix.stacks.name }}" >> "$GITHUB_OUTPUT"
-
-    # TODO remove before PR
-    - name: Tree
-      run: tree .
 
     - name: Upload run image
       uses: actions/upload-artifact@v4
@@ -317,15 +298,11 @@ jobs:
         fi
         echo '{"components":[]}' > "${{ github.workspace }}/previous-run-receipt-${{ matrix.stacks.name }}"
 
-    # TODO remove before PR
-    - name: Treee
-      run: tree .
-
     - name: Find and Download Previous Build Receipt
       if: ${{ steps.check_previous.outputs.exists == 'true' && matrix.stacks.create_build_image == true }}
       uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
       with:
-        asset_pattern: "${{ matrix.stacks.build_image }}-${{ env.RECEIPT_FILENAME_SUFFIX}}"
+        asset_pattern: "${{ matrix.stacks.build_receipt_filename }}"
         search_depth: 1
         repo: ${{ github.repository }}
         output_path: "/github/workspace/previous-build-receipt-${{ matrix.stacks.name }}"
@@ -336,16 +313,12 @@ jobs:
       if: ${{ steps.check_previous.outputs.exists == 'true' }}
       uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
       with:
-        asset_pattern: "${{ matrix.stacks.run_image }}-${{ env.RECEIPT_FILENAME_SUFFIX}}"
+        asset_pattern: "${{ matrix.stacks.run_receipt_filename }}"
         search_depth: 1
         repo: ${{ github.repository }}
         output_path: "/github/workspace/previous-run-receipt-${{ matrix.stacks.name }}"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
         strict: true
-
-    # TODO remove before PR 
-    - name: Treee
-      run: tree .
 
     - name: Compare Build Packages
       id: build_diff
@@ -375,7 +348,7 @@ jobs:
 
          # only fail if packages are removed AND the release has not been forced
          if ([ "${build}" -gt 0 ] && [ "${{ matrix.stacks.create_build_image }}" == "true"  ]) || [ "${run}" -gt 0 ]; then
-           if [ "${{ github.event.inputs.force }}" != "true" ]; then
+           if [ "${{ github.event.inputs.force }}" != 'true' ]; then
              echo "Packages removed without authorization. Stack cannot be released."
              exit 1
            else
@@ -432,10 +405,6 @@ jobs:
       uses: actions/download-artifact@v4
       with:
        name: diff-${{ matrix.stacks.name }}
-
-    #TODO remove before pr
-    - name: Treeee
-      run: tree .
 
     - name: Create env variables
       run: |
@@ -554,9 +523,8 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-22.04
-    needs: [poll_images, create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, run_if_packages_removed_with_force, test, force_release_creation, preparation]
-    if: |
-      ${{ needs.diff.result == 'success' && needs.test.result == 'success' && ( needs.run_if_packages_changed.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
+    needs: [create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, run_if_packages_removed_with_force, test, force_release_creation, preparation ]
+    if: ${{ needs.diff.result == 'success' && needs.test.result == 'success' && (needs.run_if_packages_changed.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
     strategy:
       matrix:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
@@ -577,7 +545,6 @@ jobs:
       with:
         fetch-depth: 0  # gets full history
 
-    # TODO test that it does not increment multiple times
     - name: Increment Tag
       if: github.event.inputs.version == ''
       id: semver
@@ -612,10 +579,6 @@ jobs:
       with:
        name: diff-${{ matrix.stacks.name }}
 
-    # TODO remove before final PR
-    - name: Treeee
-      run: tree .
-
     - name: Release notes preparation
       id: release_notes_preparation
       run: |
@@ -637,6 +600,7 @@ jobs:
         echo "run_removed_with_force=$(jq -c <<< "$(cat run_removed_with_force)" )" >> "$GITHUB_OUTPUT"
 
 
+    # TODO replace pacostas with the one from ubi-base-stack
     - name: Create Release Notes
       id: notes
       uses: pacostas/github-config/actions/stack/release-notes@create-release-reusable
@@ -649,7 +613,7 @@ jobs:
         run_packages_added: ${{ steps.release_notes_preparation.outputs.run_added }}
         run_packages_modified: ${{ steps.release_notes_preparation.outputs.run_modified }}
         run_packages_removed_with_force: ${{ steps.release_notes_preparation.outputs.run_removed_with_force }}
-        supports_usns: ${{ needs.preparation.outputs.support_usns }}       
+        supports_usns: ${{ needs.preparation.outputs.support_usns }}
 
     - name: Setup Release Assets
       id: assets
@@ -657,8 +621,8 @@ jobs:
         assets="$(jq --null-input --compact-output \
           --arg tag "${{ steps.tag.outputs.tag }}" \
           --arg repo "${{ steps.repo_name.outputs.github_repo_name }}" \
-          --arg build_receipt "${{ matrix.stacks.build_receipt_filename }}-${{ env.RECEIPT_FILENAME_SUFFIX }}" \
-          --arg run_receipt "${{ matrix.stacks.run_receipt_filename }}-${{ env.RECEIPT_FILENAME_SUFFIX }}" \
+          --arg build_receipt "${{ matrix.stacks.build_receipt_filename }}" \
+          --arg run_receipt "${{ matrix.stacks.run_receipt_filename }}" \
           '[
             {
               "path": ("current-build-image-${{ matrix.stacks.name }}/build" + ".oci"),
@@ -671,16 +635,6 @@ jobs:
               "content_type": "application/gzip"
             },
             {
-              "path": ("hash-code-current-build-image-${{ matrix.stacks.name }}"),
-              "name": ($repo + "-" + $tag + "-" + "${{ matrix.stacks.build_image }}.oci.sha256"),
-              "content_type": "application/gzip"
-            },
-            {
-              "path": ("hash-code-current-run-image-${{ matrix.stacks.name }}"),
-              "name": ($repo + "-" + $tag + "-" + "${{ matrix.stacks.run_image }}.oci.sha256"),
-              "content_type": "application/gzip"
-            },
-            {
               "path": ("current-build-receipt-${{ matrix.stacks.name }}"),
               "name": ($repo + "-" + $tag + "-" + $build_receipt),
               "content_type": "text/plain"
@@ -689,6 +643,16 @@ jobs:
               "path": ("current-run-receipt-${{ matrix.stacks.name }}"),
               "name": ($repo + "-" + $tag + "-" + $run_receipt),
               "content_type": "text/plain"
+            },
+            {
+              "path": ("hash-code-current-build-image-${{ matrix.stacks.name }}"),
+              "name": ($repo + "-" + $tag + "-" + "${{ matrix.stacks.build_image }}.oci.sha256"),
+              "content_type": "application/gzip"
+            },
+            {
+              "path": ("hash-code-current-run-image-${{ matrix.stacks.name }}"),
+              "name": ($repo + "-" + $tag + "-" + "${{ matrix.stacks.run_image }}.oci.sha256"),
+              "content_type": "application/gzip"
             }]')"
 
         # Exclude/filter the assets that are not required for the release.
@@ -752,10 +716,6 @@ jobs:
         pattern: release-body-*
         merge-multiple: true
 
-    # TODO remove before PR
-    - name: Treeeeee
-      run: tree .
-
     - name: Merge release bodies
       id: merge_release_bodies
       run: |
@@ -798,10 +758,6 @@ jobs:
       with:
         pattern: current-run-receipt-*
         merge-multiple: true
-        
-    # TODO remove before pr
-    - name: Treee
-      run: tree .
 
     - name: Create Release
       uses: paketo-buildpacks/github-config/actions/release/create@main
@@ -818,19 +774,19 @@ jobs:
   failure:
     name: Alert on Failure
     runs-on: ubuntu-22.04
-    needs: [create_stack, test, release, create_release]
-    if: ${{ always() && needs.create_stack.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' || needs.create_release.result == 'failure' }}
+    needs: [preparation, poll_images, create_stack, diff, test, release, create_release, packages_changed, stack_files_changed]
+    if: ${{ always() && needs.preparation.result == 'failure' || needs.poll_images.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' || needs.create_release.result == 'failure' || needs.packages_changed.result == 'failure' || needs.stack_files_changed.result == 'failure' }}
     steps:
-      - name: File Failure Alert Issue
-        uses: paketo-buildpacks/github-config/actions/issue/file@main
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repo: ${{ github.repository }}
-          label: "failure:release"
-          comment_if_exists: true
-          issue_title: "Failure: Create Release workflow"
-          issue_body: |
-            Create Release workflow [failed](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}).
-            Unable to update ubi images.
-          comment_body: |
-            Another failure occurred: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
+    - name: File Failure Alert Issue
+      uses: paketo-buildpacks/github-config/actions/issue/file@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        repo: ${{ github.repository }}
+        label: "failure:release"
+        comment_if_exists: true
+        issue_title: "Failure: Create Release workflow"
+        issue_body: |
+          Create Release workflow [failed](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}).
+          Unable to update images.
+        comment_body: |
+          Another failure occurred: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}

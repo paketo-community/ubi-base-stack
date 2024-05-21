@@ -8,8 +8,8 @@
       "output_dir": "build",
       "build_image": "build",
       "run_image": "run",
-      "build_receipt_filename": "build",
-      "run_receipt_filename": "run",
+      "build_receipt_filename": "build-receipt.cyclonedx.json",
+      "run_receipt_filename": "run-receipt.cyclonedx.json",
       "create_build_image": true,
       "base_build_container_image": "docker://registry.access.redhat.com/ubi8/ubi-minimal",
       "base_run_container_image": "docker://registry.access.redhat.com/ubi8/ubi-minimal"
@@ -20,8 +20,8 @@
       "output_dir": "build-java-8",
       "build_image": "build-java-8",
       "run_image": "run-java-8",
-      "build_receipt_filename": "build-java-8",
-      "run_receipt_filename": "run-java-8",
+      "build_receipt_filename": "build-java-8-receipt.cyclonedx.json",
+      "run_receipt_filename": "run-java-8-receipt.cyclonedx.json",
       "base_run_container_image": "docker://registry.access.redhat.com/ubi8/openjdk-8-runtime"
     },
     {
@@ -30,8 +30,8 @@
       "output_dir": "build-java-11",
       "build_image": "build-java-11",
       "run_image": "run-java-11",
-      "build_receipt_filename": "build-java-11",
-      "run_receipt_filename": "run-java-11",
+      "build_receipt_filename": "build-java-11-receipt.cyclonedx.json",
+      "run_receipt_filename": "run-java-11-receipt.cyclonedx.json",
       "base_run_container_image": "docker://registry.access.redhat.com/ubi8/openjdk-11-runtime"
     },
     {
@@ -40,8 +40,8 @@
       "output_dir": "build-java-17",
       "build_image": "build-java-17",
       "run_image": "run-java-17",
-      "build_receipt_filename": "build-java-17",
-      "run_receipt_filename": "run-java-17",
+      "build_receipt_filename": "build-java-17-receipt.cyclonedx.json",
+      "run_receipt_filename": "run-java-17-receipt.cyclonedx.json",
       "base_run_container_image": "docker://registry.access.redhat.com/ubi8/openjdk-17-runtime"
     },
     {
@@ -50,8 +50,8 @@
       "output_dir": "build-java-21",
       "build_image": "build-java-21",
       "run_image": "run-java-21",
-      "build_receipt_filename": "build-java-21",
-      "run_receipt_filename": "run-java-21",
+      "build_receipt_filename": "build-java-21-receipt.cyclonedx.json",
+      "run_receipt_filename": "run-java-21-receipt.cyclonedx.json",
       "base_run_container_image": "docker://registry.access.redhat.com/ubi8/openjdk-21-runtime"
     },
     {
@@ -60,8 +60,8 @@
       "output_dir": "build-nodejs-16",
       "build_image": "build-nodejs-16",
       "run_image": "run-nodejs-16",
-      "build_receipt_filename": "build-nodejs-16",
-      "run_receipt_filename": "run-nodejs-16",
+      "build_receipt_filename": "build-nodejs-16-receipt.cyclonedx.json",
+      "run_receipt_filename": "run-nodejs-16-receipt.cyclonedx.json",
       "base_run_container_image": "docker://registry.access.redhat.com/ubi8/nodejs-16-minimal"
     },
     {
@@ -70,8 +70,8 @@
       "output_dir": "build-nodejs-18",
       "build_image": "build-nodejs-18",
       "run_image": "run-nodejs-18",
-      "build_receipt_filename": "build-nodejs-18",
-      "run_receipt_filename": "run-nodejs-18",
+      "build_receipt_filename": "build-nodejs-18-receipt.cyclonedx.json",
+      "run_receipt_filename": "run-nodejs-18-receipt.cyclonedx.json",
       "base_run_container_image": "docker://registry.access.redhat.com/ubi8/nodejs-18-minimal"
     },
     {
@@ -80,8 +80,8 @@
       "output_dir": "build-nodejs-20",
       "build_image": "build-nodejs-20",
       "run_image": "run-nodejs-20",
-      "build_receipt_filename": "build-nodejs-20",
-      "run_receipt_filename": "run-nodejs-20",
+      "build_receipt_filename": "build-nodejs-20-receipt.cyclonedx.json",
+      "run_receipt_filename": "run-nodejs-20-receipt.cyclonedx.json",
       "base_run_container_image": "docker://registry.access.redhat.com/ubi8/nodejs-20-minimal:1-16"
     }
   ]
