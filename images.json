@@ -82,7 +82,7 @@
       "run_image": "run-nodejs-20",
       "build_receipt_filename": "build-nodejs-20-receipt.cyclonedx.json",
       "run_receipt_filename": "run-nodejs-20-receipt.cyclonedx.json",
-      "base_run_container_image": "docker://registry.access.redhat.com/ubi8/nodejs-20-minimal:1-16"
+      "base_run_container_image": "docker://registry.access.redhat.com/ubi8/nodejs-20-minimal"
     }
   ]
 }
