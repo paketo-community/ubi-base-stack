@@ -1,7 +1,5 @@
 name: Create Release
 
-# TODO add next to the images the stack name
-# TODO  put the github-config change on the ubi -base stack 
 on:
 # TODO uncomment below code before pr
   # schedule:
@@ -603,7 +601,7 @@ jobs:
     # TODO replace pacostas with the one from ubi-base-stack
     - name: Create Release Notes
       id: notes
-      uses: pacostas/github-config/actions/stack/release-notes@create-release-reusable
+      uses: pacostas/ubi-base-stack/actions/stack/release-notes@main
       with:
         build_image: ${{ steps.release_notes_preparation.outputs.build_image }}
         run_image: ${{ steps.release_notes_preparation.outputs.run_image }}
