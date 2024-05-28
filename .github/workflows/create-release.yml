@@ -9,930 +9,779 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version of the release to cut (e.g. 1.2.3). No leading v"
+        description: 'Version of the release to cut (e.g. 1.2.3). No leading v'
         required: false
       force:
-        description: "Release stack even if change validator does not detect changes, or a package is removed"
+        description: 'Release stack even if change validator does not detect changes, or a package is removed'
         required: true
         type: choice
-        default: "false"
+        default: 'false'
         options:
-          - "true"
-          - "false"
+        - 'true'
+        - 'false'
 
 concurrency: release
 env:
-  UBI_BUILD_SHA256_FILENAME: build.oci.sha256
-  UBI_RUN_SHA256_FILENAME: run.oci.sha256
-  UBI_RUN_NODEJS_16_SHA256_FILENAME: run-nodejs-16.oci.sha256
-  UBI_RUN_NODEJS_18_SHA256_FILENAME: run-nodejs-18.oci.sha256
-  UBI_RUN_NODEJS_20_SHA256_FILENAME: run-nodejs-20.oci.sha256
-  UBI_RUN_JAVA_8_SHA256_FILENAME: run-java-8.oci.sha256
-  UBI_RUN_JAVA_11_SHA256_FILENAME: run-java-11.oci.sha256
-  UBI_RUN_JAVA_17_SHA256_FILENAME: run-java-17.oci.sha256
-  UBI_RUN_JAVA_21_SHA256_FILENAME: run-java-21.oci.sha256
+  STACKS_FILENAME: "images.json"
 
 jobs:
-  poll_ubi_images:
-    name: Poll UBI Images
+  preparation:
+    name: Preparation
     runs-on: ubuntu-22.04
     outputs:
-      ubi_images_need_update: ${{ steps.compare_previous_and_current_sha256_hash_codes.outputs.ubi_images_need_update }}
-      ubi_image_previous_hash_codes: ${{ steps.compare_previous_and_current_sha256_hash_codes.outputs.ubi_image_previous_hash_codes }}
-      ubi_image_current_hash_codes: ${{ steps.compare_previous_and_current_sha256_hash_codes.outputs.ubi_image_current_hash_codes }}
-
+      stacks: ${{ steps.get-stack-names.outputs.stacks }}
+      support_usns: ${{ steps.get-stack-names.outputs.support_usns }}
+      github_repo_name: ${{ steps.repo.outputs.github_repo_name }}
+      registry_repo_name: ${{ steps.repo.outputs.registry_repo_name }}
+      repo_owner: ${{ steps.repo.outputs.repo_owner }}
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Find and Download Previous build sha256 image hash code
-        id: fetch_previous_build_sha256_image_hash_code
-        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
-        with:
-          asset_pattern: "${{ env.UBI_BUILD_SHA256_FILENAME }}"
-          search_depth: 1
-          repo: ${{ github.repository }}
-          output_path: "/github/workspace/${{ env.UBI_BUILD_SHA256_FILENAME }}"
-          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-      - name: Find and Download Previous run sha256 image hash code
-        id: fetch_previous_run_sha256_image_hash_code
-        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
-        with:
-          asset_pattern: "${{ env.UBI_RUN_SHA256_FILENAME }}"
-          search_depth: 1
-          repo: ${{ github.repository }}
-          output_path: "/github/workspace/${{ env.UBI_RUN_SHA256_FILENAME }}"
-          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-      - name: Find and Download Previous run Node.js 16 sha256 image hash code
-        id: fetch_previous_run_nodejs_16_sha256_image_hash_code
-        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
-        with:
-          asset_pattern: "${{ env.UBI_RUN_NODEJS_16_SHA256_FILENAME }}"
-          search_depth: 1
-          repo: ${{ github.repository }}
-          output_path: "/github/workspace/${{ env.UBI_RUN_NODEJS_16_SHA256_FILENAME }}"
-          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-      - name: Find and Download Previous run Node.js 18 sha256 image hash code
-        id: fetch_previous_run_nodejs_18_sha256_image_hash_code
-        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
-        with:
-          asset_pattern: "${{ env.UBI_RUN_NODEJS_18_SHA256_FILENAME }}"
-          search_depth: 1
-          repo: ${{ github.repository }}
-          output_path: "/github/workspace/${{ env.UBI_RUN_NODEJS_18_SHA256_FILENAME }}"
-          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-      - name: Find and Download Previous run Node.js 20 sha256 image hash code
-        id: fetch_previous_run_nodejs_20_sha256_image_hash_code
-        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
-        with:
-          asset_pattern: "${{ env.UBI_RUN_NODEJS_20_SHA256_FILENAME }}"
-          search_depth: 1
-          repo: ${{ github.repository }}
-          output_path: "/github/workspace/${{ env.UBI_RUN_NODEJS_20_SHA256_FILENAME }}"
-          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-      - name: Find and Download Previous run Java 8 sha256 image hash code
-        id: fetch_previous_run_java_8_sha256_image_hash_code
-        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
-        with:
-          asset_pattern: "${{ env.UBI_RUN_JAVA_8_SHA256_FILENAME }}"
-          search_depth: 1
-          repo: ${{ github.repository }}
-          output_path: "/github/workspace/${{ env.UBI_RUN_JAVA_8_SHA256_FILENAME }}"
-          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-      - name: Find and Download Previous run Java 11 sha256 image hash code
-        id: fetch_previous_run_java_11_sha256_image_hash_code
-        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
-        with:
-          asset_pattern: "${{ env.UBI_RUN_JAVA_11_SHA256_FILENAME }}"
-          search_depth: 1
-          repo: ${{ github.repository }}
-          output_path: "/github/workspace/${{ env.UBI_RUN_JAVA_11_SHA256_FILENAME }}"
-          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-      - name: Find and Download Previous run Java 17 sha256 image hash code
-        id: fetch_previous_run_java_17_sha256_image_hash_code
-        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
-        with:
-          asset_pattern: "${{ env.UBI_RUN_JAVA_17_SHA256_FILENAME }}"
-          search_depth: 1
-          repo: ${{ github.repository }}
-          output_path: "/github/workspace/${{ env.UBI_RUN_JAVA_17_SHA256_FILENAME }}"
-          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-      - name: Find and Download Previous run Java 21 sha256 image hash code
-        id: fetch_previous_run_java_21_sha256_image_hash_code
-        uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
-        with:
-          asset_pattern: "${{ env.UBI_RUN_JAVA_21_SHA256_FILENAME }}"
-          search_depth: 1
-          repo: ${{ github.repository }}
-          output_path: "/github/workspace/${{ env.UBI_RUN_JAVA_21_SHA256_FILENAME }}"
-          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-      - name: Compare previous and current sha256 hash codes
-        id: compare_previous_and_current_sha256_hash_codes
+      - name: Get stack names and USN support
+        id: get-stack-names
         run: |
+          stacks=$(
+            cat <<EOF
+          [
+            {
+              "name": "stack",
+              "config_dir": "stack",
+              "output_dir": "build",
+              "build_image": "build",
+              "run_image": "run",
+              "create_build_image": true
+            }
+          ]
+          EOF
+          )
 
-          ubi_images_need_update=()
-          ubi_image_current_hash_codes=()
+          support_usns=true
 
-          # Build Image
-          current_build_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
+          if [[ -f ${{ env.STACKS_FILENAME }} ]]; then
+            stacks=$(jq '[.images[] |
+            . +
+            {
+              "create_build_image": (.create_build_image // false)
+            }]' ${{ env.STACKS_FILENAME }} )
 
-          previous_build_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_BUILD_SHA256_FILENAME }}
-          previous_build_sha256_image_hash_code=""
-          if [ -f "$previous_build_sha256_image_hash_code_filepath" ]; then
-            previous_build_sha256_image_hash_code=$(cat $previous_build_sha256_image_hash_code_filepath)
+            support_usns=$( jq '.support_usns' ${{ env.STACKS_FILENAME }} )
           fi
 
-          ubi_image_current_hash_codes+=("node-build" $current_build_sha256_image_hash_code)
+          stacks=$(jq -c <<< "$stacks" )
+          printf "stacks=%s\n" "${stacks}" >> "$GITHUB_OUTPUT"
+          printf "support_usns=%s\n" "${support_usns}" >> "$GITHUB_OUTPUT"
 
-          if [ "$previous_build_sha256_image_hash_code" != "$current_build_sha256_image_hash_code" ]; then
-            ubi_images_need_update+=("node-build")
+      - name: Get Repository Name
+        id: repo
+        run: |
+          full=${{ github.repository }}
+          # Strip off the org and slash from repo name
+          # paketo-buildpacks/jammy-base-stack --> jammy-base-stack
+          repo=$(echo "${full}" | sed 's/^.*\///')
+          echo "github_repo_name=${repo}" >> "$GITHUB_OUTPUT"
+
+          # Strip off 'stack' suffix from repo name
+          # paketo-buildpacks/jammy-base-stack --> jammy-base
+          registry_repo="${repo//-stack/}"
+          echo "registry_repo_name=${registry_repo}" >> "$GITHUB_OUTPUT"
+
+          # translates 'paketo-buildpacks' to 'paketobuildpacks'
+          repo_owner="${GITHUB_REPOSITORY_OWNER/-/}"
+          printf "repo_owner=%s\n" "${repo_owner}" >> "$GITHUB_OUTPUT"
+
+  poll_images:
+    name: Poll Images
+    runs-on: ubuntu-22.04
+    needs: preparation
+    strategy:
+      matrix:
+        stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
+    outputs:
+      images_need_update: ${{ steps.compare_previous_and_current_sha256_hash_codes.outputs.images_need_update }}
+    steps:
+    - name: Find and Download Previous build image hash code of stack ${{ matrix.stacks.build_image }}
+      if: ${{ matrix.stacks.create_build_image == true }}
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+      with:
+        asset_pattern: "${{ matrix.stacks.build_image }}.oci.sha256"
+        search_depth: 1
+        repo: ${{ github.repository }}
+        output_path: "/github/workspace/previous_${{ matrix.stacks.build_image }}.oci.sha256"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+    - name: Find and Download Previous run image hash code of stack ${{ matrix.stacks.run_image }}
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+      with:
+        asset_pattern: "${{ matrix.stacks.run_image }}.oci.sha256"
+        search_depth: 1
+        repo: ${{ github.repository }}
+        output_path: "/github/workspace/previous_${{ matrix.stacks.run_image }}.oci.sha256"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+    - name: Get current run image hascode of ${{ matrix.stacks.name }} stack
+      run: |
+        skopeo inspect --format "{{.Digest}}" ${{ matrix.stacks.base_run_container_image }} > hash-code-current-run-image-${{ matrix.stacks.name }}
+
+    - name: Get current build image hascode of ${{ matrix.stacks.name }} stack
+      if: ${{ matrix.stacks.create_build_image == true }}
+      run: |
+        skopeo inspect --format "{{.Digest}}" ${{ matrix.stacks.base_build_container_image }} > hash-code-current-build-image-${{ matrix.stacks.name }}
+
+    - name: Upload run image hash code
+      uses: actions/upload-artifact@v4
+      with:
+        name: hash-code-current-run-image-${{ matrix.stacks.name }}
+        path: hash-code-current-run-image-${{ matrix.stacks.name }}
+        if-no-files-found: error 
+
+    - name: Upload build image hash code
+      if: ${{ matrix.stacks.create_build_image == true }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: hash-code-current-build-image-${{ matrix.stacks.name }}
+        path: hash-code-current-build-image-${{ matrix.stacks.name }}
+        if-no-files-found: error
+
+    - name: Compare previous and current hash codes
+      id: compare_previous_and_current_sha256_hash_codes
+      run: |
+        if [ "$(cat previous_${{ matrix.stacks.run_image }}.oci.sha256)" != "$(cat hash-code-current-run-image-${{ matrix.stacks.name }})" ]; then
+          echo "images_need_update=true" >> "$GITHUB_OUTPUT"
+        fi
+
+        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
+
+          if [ "$(cat previous_${{ matrix.stacks.build_image }}.oci.sha256)" != "$(cat hash-code-current-build-image-${{ matrix.stacks.name }})" ]; then
+            echo "images_need_update=true" >> "$GITHUB_OUTPUT"
           fi
+        fi
 
-          # Run Image
-          current_run_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/ubi-minimal)
+  stack_files_changed:
+    name: Determine If Stack Files Changed
+    runs-on: ubuntu-22.04
+    needs: [ poll_images, preparation ] 
+    if: ${{ ! ( needs.poll_images.outputs.images_need_update == null &&  github.event_name == 'schedule' ) }}
+    strategy:
+      matrix:
+        stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
+    outputs:
+      stack_files_changed: ${{ steps.compare.outputs.stack_files_changed }}
+    steps:
+    - name: Checkout With History
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # gets full history
 
-          previous_run_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_RUN_SHA256_FILENAME }}
-          previous_run_sha256_image_hash_code=""
-          if [ -f "$previous_run_sha256_image_hash_code_filepath" ]; then
-            previous_run_sha256_image_hash_code=$(cat $previous_run_sha256_image_hash_code_filepath)
-          fi
+    - name: Compare With Previous Release
+      id: compare
+      run: |
+        # shellcheck disable=SC2046
+        changed="$(git diff --name-only $(git describe --tags --abbrev=0) -- ${{ matrix.stacks.config_dir }})"
+        if [ -n "${changed}" ]
+        then
+          echo "Relevant files of ${{ matrix.stacks.name }}, have changed since previous release."
+          echo "${changed}"
+          echo "stack_files_changed=true" >> "$GITHUB_OUTPUT"
+        fi
 
-          ubi_image_current_hash_codes+=("node-run" $current_run_sha256_image_hash_code)
-
-          if [ "$previous_run_sha256_image_hash_code" != "$current_run_sha256_image_hash_code" ]; then
-            ubi_images_need_update+=("node-run")
-          fi
-
-          # Run Image Node.js 16
-          current_run_nodejs_16_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-16-minimal)
-
-          previous_run_nodejs_16_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_16_SHA256_FILENAME }}
-          previous_run_nodejs_16_sha256_image_hash_code=""
-          if [ -f "$previous_run_nodejs_16_sha256_image_hash_code_filepath" ]; then
-            previous_run_nodejs_16_sha256_image_hash_code=$(cat $previous_run_nodejs_16_sha256_image_hash_code_filepath)
-          fi
-
-          ubi_image_current_hash_codes+=("node-16-run" $current_run_nodejs_16_sha256_image_hash_code)
-
-          if [ "$previous_run_nodejs_16_sha256_image_hash_code" != "$current_run_nodejs_16_sha256_image_hash_code" ]; then
-            ubi_images_need_update+=("node-16-run")
-          fi
-
-          # Run Image Node.js 18
-          current_run_nodejs_18_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-18-minimal)
-
-          previous_run_nodejs_18_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_18_SHA256_FILENAME }}
-          previous_run_nodejs_18_sha256_image_hash_code=""
-          if [ -f "$previous_run_nodejs_18_sha256_image_hash_code_filepath" ]; then
-              previous_run_nodejs_18_sha256_image_hash_code=$(cat $previous_run_nodejs_18_sha256_image_hash_code_filepath)
-          fi
-
-          ubi_image_current_hash_codes+=("node-18-run" $current_run_nodejs_18_sha256_image_hash_code)
-
-          if [ "$previous_run_nodejs_18_sha256_image_hash_code" != "$current_run_nodejs_18_sha256_image_hash_code" ]; then
-            ubi_images_need_update+=("node-18-run")
-          fi
-
-          # Run Image Node.js 20
-          current_run_nodejs_20_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/nodejs-20-minimal)
-
-          previous_run_nodejs_20_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_RUN_NODEJS_20_SHA256_FILENAME }}
-          previous_run_nodejs_20_sha256_image_hash_code=""
-          if [ -f "$previous_run_nodejs_20_sha256_image_hash_code_filepath" ]; then
-              previous_run_nodejs_20_sha256_image_hash_code=$(cat $previous_run_nodejs_20_sha256_image_hash_code_filepath)
-          fi
-
-          ubi_image_current_hash_codes+=("node-20-run" $current_run_nodejs_20_sha256_image_hash_code)
-
-          if [ "$previous_run_nodejs_20_sha256_image_hash_code" != "$current_run_nodejs_20_sha256_image_hash_code" ]; then
-            ubi_images_need_update+=("node-20-run")
-          fi
-
-          # Run Image Java 8
-          current_run_java_8_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/openjdk-8-runtime)
-
-          previous_run_java_8_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_RUN_JAVA_8_SHA256_FILENAME }}
-          previous_run_java_8_sha256_image_hash_code=""
-          if [ -f "$previous_run_java_8_sha256_image_hash_code_filepath" ]; then
-              previous_run_java_8_sha256_image_hash_code=$(cat $previous_run_java_8_sha256_image_hash_code_filepath)
-          fi
-
-          ubi_image_current_hash_codes+=("java-8-run" $current_run_java_8_sha256_image_hash_code)
-
-          if [ "$previous_run_java_8_sha256_image_hash_code" != "$current_run_java_8_sha256_image_hash_code" ]; then
-            ubi_images_need_update+=("java-8-run")
-          fi
-
-          # Run Image Java 11
-          current_run_java_11_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/openjdk-11-runtime)
-
-          previous_run_java_11_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_RUN_JAVA_11_SHA256_FILENAME }}
-          previous_run_java_11_sha256_image_hash_code=""
-          if [ -f "$previous_run_java_11_sha256_image_hash_code_filepath" ]; then
-              previous_run_java_11_sha256_image_hash_code=$(cat $previous_run_java_11_sha256_image_hash_code_filepath)
-          fi
-
-          ubi_image_current_hash_codes+=("java-11-run" $current_run_java_11_sha256_image_hash_code)
-
-          if [ "$previous_run_java_11_sha256_image_hash_code" != "$current_run_java_11_sha256_image_hash_code" ]; then
-            ubi_images_need_update+=("java-11-run")
-          fi
-
-          # Run Image Java 17
-          current_run_java_17_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/openjdk-17-runtime)
-
-          previous_run_java_17_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_RUN_JAVA_17_SHA256_FILENAME }}
-          previous_run_java_17_sha256_image_hash_code=""
-          if [ -f "$previous_run_java_17_sha256_image_hash_code_filepath" ]; then
-              previous_run_java_17_sha256_image_hash_code=$(cat $previous_run_java_17_sha256_image_hash_code_filepath)
-          fi
-
-          ubi_image_current_hash_codes+=("java-17-run" $current_run_java_17_sha256_image_hash_code)
-
-          if [ "$previous_run_java_17_sha256_image_hash_code" != "$current_run_java_17_sha256_image_hash_code" ]; then
-            ubi_images_need_update+=("java-17-run")
-          fi
-
-          # Run Image Java 21
-          current_run_java_21_sha256_image_hash_code=$(skopeo inspect --format "{{.Digest}}" docker://registry.access.redhat.com/ubi8/openjdk-21-runtime)
-
-          previous_run_java_21_sha256_image_hash_code_filepath=${{ github.workspace }}/${{ env.UBI_RUN_JAVA_21_SHA256_FILENAME }}
-          previous_run_java_21_sha256_image_hash_code=""
-          if [ -f "$previous_run_java_21_sha256_image_hash_code_filepath" ]; then
-              previous_run_java_21_sha256_image_hash_code=$(cat $previous_run_java_21_sha256_image_hash_code_filepath)
-          fi
-
-          ubi_image_current_hash_codes+=("java-21-run" $current_run_java_21_sha256_image_hash_code)
-
-          if [ "$previous_run_java_21_sha256_image_hash_code" != "$current_run_java_21_sha256_image_hash_code" ]; then
-            ubi_images_need_update+=("java-21-run")
-          fi
-
-          # Print updates and hashcodes.
-          json_ubi_images_need_update=$(jq --compact-output --null-input '$ARGS.positional' --args -- "${ubi_images_need_update[@]}")
-          printf "ubi_images_need_update=%s\n" "${json_ubi_images_need_update}" >> "$GITHUB_OUTPUT"
-
-          json_ubi_image_current_hash_codes=$(jq --compact-output --null-input '$ARGS.positional' --args -- "${ubi_image_current_hash_codes[@]}")
-          printf "ubi_image_current_hash_codes=%s\n" "${json_ubi_image_current_hash_codes}" >> "$GITHUB_OUTPUT"
+  run_if_stack_files_changed:
+    name: Run If Stack Files Changed
+    runs-on: ubuntu-22.04
+    needs: [stack_files_changed]
+    if: ${{ needs.stack_files_changed.outputs.stack_files_changed == 'true' }}
+    steps:
+    - name: Run if stack files changed
+      run: |
+        echo "stack files have changed"
 
   create_stack:
     name: Create Stack
-    needs: poll_ubi_images
-    if: ${{ ! ( needs.poll_ubi_images.outputs.ubi_images_need_update == '[]' && github.event_name == 'schedule' ) }}
-
+    needs: [ poll_images, preparation ] 
+    if: ${{ ! ( needs.poll_images.outputs.images_need_update == null &&  github.event_name == 'schedule' ) }}
     runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      - name: Create stack
-        id: create-stack
-        run: |
-          scripts/create.sh
+    - name: Create stack ${{ matrix.stacks.name }}
+      id: create-stack
+      run: |
+        scripts/create.sh --stack-dir ${{ matrix.stacks.config_dir }} \
+                          --build-dir ${{ matrix.stacks.output_dir }}
 
-      ## build image
-      - name: Upload build image
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-build-image
-          path: ./build/build.oci
+    - name: Generate Package Receipts
+      id: receipts
+      run: |
+        scripts/receipts.sh --build-image "${{ matrix.stacks.output_dir }}/build.oci" \
+                            --run-image "${{ matrix.stacks.output_dir }}/run.oci" \
+                            --build-receipt current-build-receipt-${{ matrix.stacks.name }} \
+                            --run-receipt current-run-receipt-${{ matrix.stacks.name }}
+        echo "build_receipt=current-build-receipt-${{ matrix.stacks.name }}" >> "$GITHUB_OUTPUT"
+        echo "run_receipt=current-run-receipt-${{ matrix.stacks.name }}" >> "$GITHUB_OUTPUT"
 
-      - name: Get build image hash code
-        run: |
-          mkdir -p hash-codes/build
+    - name: Upload run image
+      uses: actions/upload-artifact@v4
+      with:
+        name: current-run-image-${{ matrix.stacks.name }}
+        path: "${{ matrix.stacks.output_dir }}/run.oci"
+        if-no-files-found: error 
 
-          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
+    - name: Upload build image
+      if: ${{ matrix.stacks.create_build_image == true }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: current-build-image-${{ matrix.stacks.name }}
+        path: "${{ matrix.stacks.output_dir }}/build.oci"
+        if-no-files-found: error 
 
-            for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
-              if [ "${ubi_image_current_hash_codes[i]}" == "node-build" ]; then
-                echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build/build.oci.sha256
-              fi
-            done
+    - name: Upload Build receipt
+      if: ${{ matrix.stacks.create_build_image == true }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: current-build-receipt-${{ matrix.stacks.name }}
+        path: ${{ steps.receipts.outputs.build_receipt }}
+        if-no-files-found: error 
 
-      - name: Upload build image hash code
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-build-image-hash-code
-          path: hash-codes/build/build.oci.sha256
+    - name: Upload Run receipt
+      uses: actions/upload-artifact@v4
+      with:
+        name: current-run-receipt-${{ matrix.stacks.name }}
+        path: ${{ steps.receipts.outputs.run_receipt }}
+        if-no-files-found: error 
 
-      ## run image
-      - name: Upload run image
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-run-image
-          path: ./build/run.oci
+  diff:
+    name: Diff Packages
+    outputs:
+      removed_with_force: ${{ steps.removed_with_force.outputs.packages_removed }}
+    needs: [ create_stack, preparation ]
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
+    steps:
+    - name: Download Build Receipt
+      if: ${{ matrix.stacks.create_build_image == true }}
+      uses: actions/download-artifact@v4
+      with:
+        name: current-build-receipt-${{ matrix.stacks.name }}
 
-      - name: Get run image hash code
-        run: |
-          mkdir -p hash-codes/build
+    - name: Download Run Receipt
+      uses: actions/download-artifact@v4
+      with:
+        name: current-run-receipt-${{ matrix.stacks.name }}
 
-          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
+    - name: Check for Previous Releases
+      id: check_previous
+      run: |
+        gh auth status
+        # shellcheck disable=SC2046
+        if [ $(gh api "/repos/${{ github.repository }}/releases" | jq -r 'length') -eq 0 ]; then
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        echo "exists=true" >> "$GITHUB_OUTPUT"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
-            if [ "${ubi_image_current_hash_codes[i]}" == "node-run" ]; then
-              echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build/run.oci.sha256
-            fi
-          done
+    - name: Write Empty Previous Receipts
+      if: ${{ steps.check_previous.outputs.exists == 'false' }}
+      run: |
+        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
+          echo '{"components":[]}' > "${{ github.workspace }}/previous-build-receipt-${{ matrix.stacks.name }}"
+        fi
+        echo '{"components":[]}' > "${{ github.workspace }}/previous-run-receipt-${{ matrix.stacks.name }}"
 
-      - name: Upload run image hash code
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-run-image-hash-code
-          path: hash-codes/build/run.oci.sha256
+    - name: Find and Download Previous Build Receipt
+      if: ${{ steps.check_previous.outputs.exists == 'true' && matrix.stacks.create_build_image == true }}
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+      with:
+        asset_pattern: "${{ matrix.stacks.build_receipt_filename }}"
+        search_depth: 1
+        repo: ${{ github.repository }}
+        output_path: "/github/workspace/previous-build-receipt-${{ matrix.stacks.name }}"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+        strict: true
 
-      ## nodejs 16 run image
-      - name: Upload nodejs 16 run image
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-nodejs-16-run-image
-          path: ./build-nodejs-16/run.oci
+    - name: Find and Download Previous Run Receipt
+      if: ${{ steps.check_previous.outputs.exists == 'true' }}
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+      with:
+        asset_pattern: "${{ matrix.stacks.run_receipt_filename }}"
+        search_depth: 1
+        repo: ${{ github.repository }}
+        output_path: "/github/workspace/previous-run-receipt-${{ matrix.stacks.name }}"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+        strict: true
 
-      - name: Get nodejs 16 run image hash code
-        run: |
-          mkdir -p hash-codes/build-nodejs-16
+    - name: Compare Build Packages
+      id: build_diff
+      if: ${{ matrix.stacks.create_build_image == true }}
+      uses: paketo-buildpacks/github-config/actions/stack/diff-package-receipts@main
+      with:
+        previous: "/github/workspace/previous-build-receipt-${{ matrix.stacks.name }}"
+        current: "/github/workspace/current-build-receipt-${{ matrix.stacks.name }}"
 
-          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
+    - name: Compare Run Packages
+      id: run_diff
+      uses: paketo-buildpacks/github-config/actions/stack/diff-package-receipts@main
+      with:
+        previous: "/github/workspace/previous-run-receipt-${{ matrix.stacks.name }}"
+        current: "/github/workspace/current-run-receipt-${{ matrix.stacks.name }}"
 
-          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
-            if [ "${ubi_image_current_hash_codes[i]}" == "node-16-run" ]; then
-              echo ${ubi_image_current_hash_codes[i + 1]}> hash-codes/build-nodejs-16/run.oci.sha256
-            fi
-          done
+    - name: Fail If Packages Removed
+      id: removed_with_force
+      run: |
+         if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
+          build=$(jq '. | length' <<< "${BUILD_REMOVED}")
+          echo "Build packages removed: ${build}"
+         fi
 
-      - name: Upload nodejs 16 run image hash code
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-nodejs-16-run-image-hash-code
-          path: hash-codes/build-nodejs-16/run.oci.sha256
+         run=$(jq '. | length' <<< "${RUN_REMOVED}")
+         echo "Run packages removed: ${run}"
 
-      ## nodejs 18 run image
-      - name: Upload nodejs 18 run image
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-nodejs-18-run-image
-          path: ./build-nodejs-18/run.oci
+         # only fail if packages are removed AND the release has not been forced
+         if ([ "${build}" -gt 0 ] && [ "${{ matrix.stacks.create_build_image }}" == "true"  ]) || [ "${run}" -gt 0 ]; then
+           if [ "${{ github.event.inputs.force }}" != 'true' ]; then
+             echo "Packages removed without authorization. Stack cannot be released."
+             exit 1
+           else
+             echo "packages_removed=true" >> "$GITHUB_OUTPUT"
+           fi
+         fi
+      env:
+        BUILD_REMOVED: ${{ steps.build_diff.outputs.removed }}
+        RUN_REMOVED: ${{ steps.run_diff.outputs.removed }}
 
-      - name: Get nodejs 18 run image hash code
-        run: |
-          mkdir -p hash-codes/build-nodejs-18
+    - name: Create/Upload variable artifacts
+      id: variable_artifacts
+      run: |
+        mkdir -p diff-${{ matrix.stacks.name }}
+        cd diff-${{ matrix.stacks.name }}
 
-          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
+        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
+         echo '${{ steps.build_diff.outputs.added }}' > build_added
+         echo '${{ steps.build_diff.outputs.modified }}' > build_modified
+         echo '${{ steps.build_diff.outputs.removed }}' > build_removed_with_force
+        fi
 
-          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
-            if [ "${ubi_image_current_hash_codes[i]}" == "node-18-run" ]; then
-              echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build-nodejs-18/run.oci.sha256
-            fi
-          done
+        echo '${{ steps.run_diff.outputs.added }}' > run_added
+        echo '${{ steps.run_diff.outputs.modified }}' > run_modified
+        echo '${{ steps.run_diff.outputs.removed }}' > run_removed_with_force
 
-      - name: Upload nodejs 18 run image hash code
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-nodejs-18-run-image-hash-code
-          path: hash-codes/build-nodejs-18/run.oci.sha256
+    - name: Upload diff-${{ matrix.stacks.name }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: diff-${{ matrix.stacks.name }}
+        path: diff-${{ matrix.stacks.name }}
 
-      ## nodejs 20 run image
-      - name: Upload nodejs 20 run image
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-nodejs-20-run-image
-          path: ./build-nodejs-20/run.oci
+  run_if_packages_removed_with_force:
+    name: Run If Packages Removed With Force
+    needs: [ diff ]
+    runs-on: ubuntu-22.04
+    if: ${{ needs.diff.outputs.removed_with_force == 'true' }}
+    steps:
+    - name: Run if packages removed with force
+      run: |
+        echo "packages removed with user-provided force"
 
-      - name: Get nodejs 20 run image hash code
-        run: |
-          mkdir -p hash-codes/build-nodejs-20
+  packages_changed:
+    name: Determine If Packages Changed
+    needs: [ diff, preparation ]
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
+    outputs:
+      packages_changed: ${{ steps.compare.outputs.packages_changed }}
+    steps:
+    - name: Download diff-${{ matrix.stacks.name }}
+      uses: actions/download-artifact@v4
+      with:
+       name: diff-${{ matrix.stacks.name }}
 
-          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
+    - name: Create env variables
+      run: |
+        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
+          echo "BUILD_ADDED=$(cat build_added)" >> $GITHUB_ENV
+          echo "BUILD_MODIFIED=$(cat build_modified)" >> $GITHUB_ENV
+        fi
+        echo "RUN_ADDED=$(cat run_added)" >> $GITHUB_ENV
+        echo "RUN_MODIFIED=$(cat run_modified)" >> $GITHUB_ENV
 
-          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
-            if [ "${ubi_image_current_hash_codes[i]}" == "node-20-run" ]; then
-              echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build-nodejs-20/run.oci.sha256
-            fi
-          done
+    - name: Compare With Previous Release
+      id: compare
+      run: |
+        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
+          # shellcheck disable=SC2153
+          build_added=$(jq '. | length' <<< "${BUILD_ADDED}")
+          echo "Build packages added: ${build_added}"
 
-      - name: Upload nodejs 20 run image hash code
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-nodejs-20-run-image-hash-code
-          path: hash-codes/build-nodejs-20/run.oci.sha256
+          # shellcheck disable=SC2153
+          build_modified=$(jq '. | length' <<< "${BUILD_MODIFIED}")
+          echo "Build packages modified: ${build_modified}"
+        fi
 
-      ## java 8 run image
-      - name: Upload java 8 run image
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-java-8-run-image
-          path: ./build-java-8/run.oci
+        # shellcheck disable=SC2153
+        run_added=$(jq '. | length' <<< "${RUN_ADDED}")
+        echo "Run packages added: ${run_added}"
 
-      - name: Get java 8 run image hash code
-        run: |
-          mkdir -p hash-codes/build-java-8
+        # shellcheck disable=SC2153
+        run_modified=$(jq '. | length' <<< "${RUN_MODIFIED}")
+        echo "Run packages modified: ${run_modified}"
 
-          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
+        if [ "${run_added}" -eq 0 ] && [ "${run_modified}" -eq 0 ]; then
+          echo "No packages changed."
+          # we dont set the "packages_changed" to false, as is already null
+          # and also due to parallelization, it will override any true value
+        else
+          echo "Packages changed."
+          echo "packages_changed=true" >> "$GITHUB_OUTPUT"
+        fi
 
-          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
-            if [ "${ubi_image_current_hash_codes[i]}" == "java-8-run" ]; then
-              echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build-java-8/run.oci.sha256
-            fi
-          done
+        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
+          if [ "${build_added}" -eq 0 ] && [ "${build_modified}" -eq 0 ]; then
+            echo "No packages changed."
+            # we dont set the "packages_changed" to false, as is already null
+            # and also due to parallelization, it will override the value
+          else
+            echo "Packages changed."
+            echo "packages_changed=true" >> "$GITHUB_OUTPUT"
+          fi
+        fi
 
-      - name: Upload java 8 run image hash code
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-java-8-run-image-hash-code
-          path: hash-codes/build-java-8/run.oci.sha256
-
-      ## java 11 run image
-      - name: Upload java 11 run image
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-java-11-run-image
-          path: ./build-java-11/run.oci
-
-      - name: Get java 11 run image hash code
-        run: |
-          mkdir -p hash-codes/build-java-11
-
-          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
-
-          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
-            if [ "${ubi_image_current_hash_codes[i]}" == "java-11-run" ]; then
-              echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build-java-11/run.oci.sha256
-            fi
-          done
-
-      - name: Upload java 11 run image hash code
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-java-11-run-image-hash-code
-          path: hash-codes/build-java-11/run.oci.sha256
-
-      ## java 17 run image
-      - name: Upload java 17 run image
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-java-17-run-image
-          path: ./build-java-17/run.oci
-
-      - name: Get java 17 run image hash code
-        run: |
-          mkdir -p hash-codes/build-java-17
-
-          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
-
-          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
-            if [ "${ubi_image_current_hash_codes[i]}" == "java-17-run" ]; then
-              echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build-java-17/run.oci.sha256
-            fi
-          done
-
-      - name: Upload java 17 run image hash code
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-java-17-run-image-hash-code
-          path: hash-codes/build-java-17/run.oci.sha256
-
-      ## java 21 run image
-      - name: Upload java 21 run image
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-java-21-run-image
-          path: ./build-java-21/run.oci
-
-      - name: Get java 21 run image hash code
-        run: |
-          mkdir -p hash-codes/build-java-21
-
-          ubi_image_current_hash_codes=($(echo '${{ needs.poll_ubi_images.outputs.ubi_image_current_hash_codes }}' | jq -r '.[]'))
-
-          for ((i = 0; i < ${#ubi_image_current_hash_codes[@]}; i += 2)); do
-            if [ "${ubi_image_current_hash_codes[i]}" == "java-21-run" ]; then
-              echo ${ubi_image_current_hash_codes[i + 1]} > hash-codes/build-java-21/run.oci.sha256
-            fi
-          done
-
-      - name: Upload java 21 run image hash code
-        uses: actions/upload-artifact@v4
-        with:
-          name: current-java-21-run-image-hash-code
-          path: hash-codes/build-java-21/run.oci.sha256
+  run_if_packages_changed:
+    name: Run If Packages Changed
+    runs-on: ubuntu-22.04
+    needs: [packages_changed]
+    if: ${{ needs.packages_changed.outputs.packages_changed == 'true' }}
+    steps:
+    - name: Run if packages changed
+      run: |
+        echo "packages have changed"
 
   test:
     name: Acceptance Test
-    needs: [create_stack]
+    needs: [ create_stack, preparation ]
     runs-on: ubuntu-22.04
     steps:
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "stable"
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 'stable'
 
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: tests ran
+      run: echo "tests ran"
 
-      - name: Create OCI artifacts destination directory
-        run: |
-          mkdir -p build
-          mkdir -p build-nodejs-16
-          mkdir -p build-nodejs-18
-          mkdir -p build-nodejs-20
-          mkdir -p build-java-8
-          mkdir -p build-java-11
-          mkdir -p build-java-17
-          mkdir -p build-java-21
+    - name: Download Build images
+      uses: actions/download-artifact@v4
+      with:
+        pattern: |
+           current-build-image-*
+    
+    - name: Download Run images
+      uses: actions/download-artifact@v4
+      with:
+        pattern: |
+           current-run-image-*
 
-      - name: Download Build Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-build-image
-          path: build
+    - name: Create OCI artifacts destination directory
+      run: |
+        echo '${{ needs.preparation.outputs.stacks }}' | jq -c '.[]' | while read -r stack; do
+          name=$(echo "$stack" | jq -r '.name')
+          output_dir=$(echo "$stack" | jq -r '.output_dir')
+          create_build_image=$(echo "$stack" | jq -r '.create_build_image')
+          mkdir $output_dir
+          mv "current-run-image-${name}/run.oci" "${output_dir}/run.oci"
+          if [ $create_build_image == 'true' ]; then
+            mv "current-build-image-${name}/build.oci" "${output_dir}/build.oci"
+          fi
+        done
 
-      - name: Download Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-run-image
-          path: build
-
-      - name: Download nodejs-16 Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-nodejs-16-run-image
-          path: build-nodejs-16
-
-      - name: Download nodejs-18 Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-nodejs-18-run-image
-          path: build-nodejs-18
-
-      - name: Download nodejs-20 Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-nodejs-20-run-image
-          path: build-nodejs-20
-
-      - name: Download java-8 Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-java-8-run-image
-          path: build-java-8
-
-      - name: Download java-11 Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-java-11-run-image
-          path: build-java-11
-
-      - name: Download java-17 Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-java-17-run-image
-          path: build-java-17
-
-      - name: Download java-21 Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-java-21-run-image
-          path: build-java-21
-
-      - name: Run Acceptance Tests
-        run: ./scripts/test.sh
+    - name: Run Acceptance Tests
+      run: ./scripts/test.sh
 
   force_release_creation:
     name: Force Release Creation
     runs-on: ubuntu-22.04
     if: ${{github.event.inputs.force == 'true'}}
     steps:
-      - name: Signal force release creation
-        run: |
-          echo "Force release creation input set to true"
+    - name: Signal force release creation
+      run: |
+        echo "Force release creation input set to true"
 
   release:
     name: Release
     runs-on: ubuntu-22.04
-    needs: [create_stack, test, force_release_creation]
-    if: ${{ always() && needs.test.result == 'success' || needs.force_release_creation.result == 'success' }}
+    needs: [create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, run_if_packages_removed_with_force, test, force_release_creation, preparation ]
+    if: ${{ needs.diff.result == 'success' && needs.test.result == 'success' && (needs.run_if_packages_changed.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
+    strategy:
+      matrix:
+        stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
-      - name: Print Release Reasoning
-        run: |
-          printf "Acceptance Tests: %s\n" "${{ needs.test.result }}"
-          printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
+    - name: Print Release Reasoning
+      run: |
+        printf "Diff Packages: %s\n" "${{ needs.diff.result }}"
+        printf "Acceptance Tests: %s\n" "${{ needs.test.result }}"
+        printf "Run If Packages Changed: %s\n" "${{ needs.run_if_packages_changed.result }}"
+        printf "Run If Packages Removed With Force: %s\n" "${{ needs.run_if_packages_removed_with_force.result }}"
+        printf "Run If Stack Files Changed: %s\n" "${{ needs.run_if_stack_files_changed.result }}"
+        printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
 
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # gets full history
+    - name: Checkout With History
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # gets full history
 
-      - name: Download Build Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-build-image
-          path: build
+    - name: Increment Tag
+      if: github.event.inputs.version == ''
+      id: semver
+      uses: paketo-buildpacks/github-config/actions/tag/increment-tag@main
+      with:
+        allow_head_tagged: true
 
-      - name: Download Build Image hash code
-        uses: actions/download-artifact@v4
-        with:
-          name: current-build-image-hash-code
-          path: build
+    - name: Set Release Tag
+      id: tag
+      run: |
+        tag="${{ github.event.inputs.version }}"
+        if [ -z "${tag}" ]; then
+          tag="${{ steps.semver.outputs.tag }}"
+        fi
+        echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
-      - name: Download Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-run-image
-          path: build
+    - name: Get Repository Name
+      id: repo_name
+      run: |
+        full=${{ github.repository }}
+        # Strip off the org and slash from repo name
+        # paketo-buildpacks/jammy-base-stack --> jammy-base-stack
+        repo=$(echo "${full}" | sed 's/^.*\///')
+        echo "github_repo_name=${repo}" >> "$GITHUB_OUTPUT"
+        # Strip off 'stack' suffix from repo name
+        # paketo-buildpacks/jammy-base-stack --> jammy-base
+        registry_repo="${repo//-stack/}"
+        echo "registry_repo_name=${registry_repo}" >> "$GITHUB_OUTPUT"
 
-      - name: Download Run Image hash code
-        uses: actions/download-artifact@v4
-        with:
-          name: current-run-image-hash-code
-          path: build
+    - name: Download diff-${{ matrix.stacks.name }}
+      uses: actions/download-artifact@v4
+      with:
+       name: diff-${{ matrix.stacks.name }}
 
-      - name: Download nodejs-16 Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-nodejs-16-run-image
-          path: build-nodejs-16
+    - name: Release notes preparation
+      id: release_notes_preparation
+      run: |
+        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
+          echo "build_image=${{ needs.preparation.outputs.repo_owner }}/${{ matrix.stacks.build_image }}-${{ needs.preparation.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}" >> "$GITHUB_OUTPUT"
+          echo "build_added=$(jq -c <<< "$(cat build_added)" )" >> "$GITHUB_OUTPUT"
+          echo "build_modified=$(jq -c <<< "$(cat build_modified)" )" >> "$GITHUB_OUTPUT"
+          echo "build_removed_with_force=$(jq -c <<< "$(cat build_removed_with_force)" )" >> "$GITHUB_OUTPUT"
+        else
+          echo "build_image=" >> "$GITHUB_OUTPUT"
+          echo "build_added=" >> "$GITHUB_OUTPUT"
+          echo "build_modified=" >> "$GITHUB_OUTPUT"
+          echo "build_removed_with_force=" >> "$GITHUB_OUTPUT"
+        fi
 
-      - name: Download nodejs-16 Run Image hash code
-        uses: actions/download-artifact@v4
-        with:
-          name: current-nodejs-16-run-image-hash-code
-          path: build-nodejs-16
+        echo "run_image=${{ needs.preparation.outputs.repo_owner }}/${{ matrix.stacks.run_image }}-${{ needs.preparation.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}" >> "$GITHUB_OUTPUT"
+        echo "run_added=$(jq -c <<< "$(cat run_added)" )" >> "$GITHUB_OUTPUT"
+        echo "run_modified=$(jq -c <<< "$(cat run_modified)" )" >> "$GITHUB_OUTPUT"
+        echo "run_removed_with_force=$(jq -c <<< "$(cat run_removed_with_force)" )" >> "$GITHUB_OUTPUT"
 
-      - name: Download nodejs-18 Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-nodejs-18-run-image
-          path: build-nodejs-18
 
-      - name: Download nodejs-18 Run Image hash code
-        uses: actions/download-artifact@v4
-        with:
-          name: current-nodejs-18-run-image-hash-code
-          path: build-nodejs-18
+    - name: Create Release Notes
+      id: notes
+      uses: paketo-community/ubi-base-stack/actions/stack/release-notes@main
+      with:
+        build_image: ${{ steps.release_notes_preparation.outputs.build_image }}
+        run_image: ${{ steps.release_notes_preparation.outputs.run_image }}
+        build_packages_added: ${{ steps.release_notes_preparation.outputs.build_added }}
+        build_packages_modified: ${{ steps.release_notes_preparation.outputs.build_modified }}
+        build_packages_removed_with_force: ${{ steps.release_notes_preparation.outputs.build_removed_with_force }}
+        run_packages_added: ${{ steps.release_notes_preparation.outputs.run_added }}
+        run_packages_modified: ${{ steps.release_notes_preparation.outputs.run_modified }}
+        run_packages_removed_with_force: ${{ steps.release_notes_preparation.outputs.run_removed_with_force }}
+        supports_usns: ${{ needs.preparation.outputs.support_usns }}
 
-      - name: Download nodejs-20 Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-nodejs-20-run-image
-          path: build-nodejs-20
+    - name: Setup Release Assets
+      id: assets
+      run: |
+        assets="$(jq --null-input --compact-output \
+          --arg tag "${{ steps.tag.outputs.tag }}" \
+          --arg repo "${{ steps.repo_name.outputs.github_repo_name }}" \
+          --arg build_receipt "${{ matrix.stacks.build_receipt_filename }}" \
+          --arg run_receipt "${{ matrix.stacks.run_receipt_filename }}" \
+          '[
+            {
+              "path": ("current-build-image-${{ matrix.stacks.name }}/build" + ".oci"),
+              "name": ($repo + "-" + $tag + "-" + "${{ matrix.stacks.build_image }}.oci"),
+              "content_type": "application/gzip"
+            },
+            {
+              "path": ("current-run-image-${{ matrix.stacks.name }}/run" + ".oci"),
+              "name": ($repo + "-" + $tag + "-" + "${{ matrix.stacks.run_image }}.oci"),
+              "content_type": "application/gzip"
+            },
+            {
+              "path": ("current-build-receipt-${{ matrix.stacks.name }}"),
+              "name": ($repo + "-" + $tag + "-" + $build_receipt),
+              "content_type": "text/plain"
+            },
+            {
+              "path": ("current-run-receipt-${{ matrix.stacks.name }}"),
+              "name": ($repo + "-" + $tag + "-" + $run_receipt),
+              "content_type": "text/plain"
+            },
+            {
+              "path": ("hash-code-current-build-image-${{ matrix.stacks.name }}"),
+              "name": ($repo + "-" + $tag + "-" + "${{ matrix.stacks.build_image }}.oci.sha256"),
+              "content_type": "application/gzip"
+            },
+            {
+              "path": ("hash-code-current-run-image-${{ matrix.stacks.name }}"),
+              "name": ($repo + "-" + $tag + "-" + "${{ matrix.stacks.run_image }}.oci.sha256"),
+              "content_type": "application/gzip"
+            }]')"
 
-      - name: Download nodejs-20 Run Image hash code
-        uses: actions/download-artifact@v4
-        with:
-          name: current-nodejs-20-run-image-hash-code
-          path: build-nodejs-20
+        # Exclude/filter the assets that are not required for the release.
+          if [ "${{ matrix.stacks.create_build_image }}" == "false" ]; then
+          assets=$(jq -c --arg stack_name "${{ matrix.stacks.name }}" '[ 
+            .[] 
+            | select(
+                .path 
+                | (contains("current-build-image-" + $stack_name + "/build.oci")
+                or contains("hash-code-current-build-image-" + $stack_name)
+                or contains("current-build-receipt-" + $stack_name))
+                | not
+            )
+          ]' <<< "$assets")
+        fi
 
-      - name: Download java-8 Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-java-8-run-image
-          path: build-java-8
+        echo "${assets}" > release-assets-${{ matrix.stacks.name }}
 
-      - name: Download java-8 Run Image hash code
-        uses: actions/download-artifact@v4
-        with:
-          name: current-java-8-run-image-hash-code
-          path: build-java-8
+    - name: Save release notes
+      id: save_notes
+      run: |
+        echo '${{ steps.notes.outputs.release_body }}' > release-body-${{ matrix.stacks.name }}
 
-      - name: Download java-11 Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-java-11-run-image
-          path: build-java-11
+    - name: Upload release notes of ${{ matrix.stacks.name }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-body-${{ matrix.stacks.name }}
+        path: release-body-${{ matrix.stacks.name }}
 
-      - name: Download java-11 Run Image hash code
-        uses: actions/download-artifact@v4
-        with:
-          name: current-java-11-run-image-hash-code
-          path: build-java-11
+    - name: Upload release assets of ${{ matrix.stacks.name }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-assets-${{ matrix.stacks.name }}
+        path: release-assets-${{ matrix.stacks.name }}
 
-      - name: Download java-17 Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-java-17-run-image
-          path: build-java-17
+  create_release:
+    name: Create Release
+    runs-on: ubuntu-22.04
+    needs: release
+    if: ${{ needs.release.result == 'success' }}
+    steps:
+    - name: download release assets
+      uses: actions/download-artifact@v4
+      with:
+        pattern: release-assets-*
+        merge-multiple: true
 
-      - name: Download java-17 Run Image hash code
-        uses: actions/download-artifact@v4
-        with:
-          name: current-java-17-run-image-hash-code
-          path: build-java-17
+    - name: Merge release assets
+      id: merge_release_assets
+      run: |
+        merged_release_assets='[]'
+        for file in release-assets-*; do
+          merged_release_assets=$(jq -s add "$file" <(echo "$merged_release_assets") | jq -c)
+        done
 
-      - name: Download java-21 Run Image
-        uses: actions/download-artifact@v4
-        with:
-          name: current-java-21-run-image
-          path: build-java-21
+        printf "assets=$merged_release_assets" >> "$GITHUB_OUTPUT"
 
-      - name: Download java-21 Run Image hash code
-        uses: actions/download-artifact@v4
-        with:
-          name: current-java-21-run-image-hash-code
-          path: build-java-21
+    - name: Download release bodies
+      uses: actions/download-artifact@v4
+      with:
+        pattern: release-body-*
+        merge-multiple: true
 
-      - name: Increment Tag
-        if: github.event.inputs.version == ''
-        id: semver
-        uses: paketo-buildpacks/github-config/actions/tag/increment-tag@main
-        with:
-          allow_head_tagged: true
-
-      - name: Set Release Tag
-        id: tag
-        run: |
-          tag="${{ github.event.inputs.version }}"
-          if [ -z "${tag}" ]; then
-            tag="${{ steps.semver.outputs.tag }}"
+    - name: Merge release bodies
+      id: merge_release_bodies
+      run: |
+        release_body=""
+        for filename in release-body-*; do
+          if [[ -n "$release_body" ]]; then
+            release_body+=$'\n'
           fi
-          echo "tag=${tag}"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          release_body+=$(cat "$filename")
+        done
 
-      - name: Get Repository Name
-        id: repo_name
-        run: |
-          full=${{ github.repository }}
-          # Strip off the org and slash from repo name
-          # paketo-buildpacks/repo-name --> repo-name
-          repo=$(echo "${full}" | sed 's/^.*\///')
-          echo "github_repo_name=${repo}" >> "$GITHUB_OUTPUT"
+        json_release_body=$(jq -c -n --arg content "$release_body" '{text: $content}')
 
-          # Strip off 'stack' suffix from repo name
-          # some-name-stack --> some-name
-          registry_repo="${repo//-stack/}"
-          echo "registry_repo_name=${registry_repo}" >> "$GITHUB_OUTPUT"
+        echo "release_body=$json_release_body" >> $GITHUB_OUTPUT
 
-      - name: Create Release Notes
-        id: notes
-        run: |
-          release_body="\#\# Images"
-          release_body+=" \<br \/\> "
+    - name: Download current build images
+      uses: actions/download-artifact@v4
+      with:
+        pattern: current-build-image-*
 
-          release_body+="Build: paketocommunity/build${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
-          release_body+=" \<br \/\> "
+    - name: Download current run images
+      uses: actions/download-artifact@v4
+      with:
+        pattern: current-run-image-*
 
-          release_body+="Run: paketocommunity/run-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
-          release_body+=" \<br \/\> "
+    - name: Download current hash codes
+      uses: actions/download-artifact@v4
+      with:
+        pattern: hash-code-*
+        merge-multiple: true
 
-          release_body+="Run Node.js 16: paketocommunity/run-nodejs-16-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
-          release_body+=" \<br \/\> "
+    - name: Download Build Receipts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: current-build-receipt-*
+        merge-multiple: true
 
-          release_body+="Run Node.js 18: paketocommunity/run-nodejs-18-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
-          release_body+=" \<br \/\> "
+    - name: Download Run Receipts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: current-run-receipt-*
+        merge-multiple: true
 
-          release_body+="Run Node.js 20: paketocommunity/run-nodejs-20-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
-          release_body+=" \<br \/\> "
-
-          release_body+="Run Java 8: paketocommunity/run-java-8-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
-          release_body+=" \<br \/\> "
-
-          release_body+="Run Java 11: paketocommunity/run-java-11-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
-          release_body+=" \<br \/\> "
-
-          release_body+="Run Java 17: paketocommunity/run-java-17-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
-          release_body+=" \<br \/\> "
-
-          release_body+="Run Java 21: paketocommunity/run-java-21-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
-          release_body+=" \<br \/\> "
-
-          echo "release_body=${release_body}" >> "$GITHUB_OUTPUT"
-
-      - name: Setup Release Assets
-        id: assets
-        run: |
-          assets="$(jq --null-input --compact-output \
-            --arg tag "${{ steps.tag.outputs.tag }}" \
-            --arg repo "${{ steps.repo_name.outputs.github_repo_name }}" \
-            '[
-              {
-                "path": "build-java-8/run.oci",
-                "name": ($repo + "-" + $tag + "-" + "run-java-8.oci"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build-java-8/run.oci.sha256",
-                "name": ($repo + "-" + $tag + "-" + "run-java-8.oci.sha256"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build-java-11/run.oci",
-                "name": ($repo + "-" + $tag + "-" + "run-java-11.oci"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build-java-11/run.oci.sha256",
-                "name": ($repo + "-" + $tag + "-" + "run-java-11.oci.sha256"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build-java-17/run.oci",
-                "name": ($repo + "-" + $tag + "-" + "run-java-17.oci"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build-java-17/run.oci.sha256",
-                "name": ($repo + "-" + $tag + "-" + "run-java-17.oci.sha256"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build-java-21/run.oci",
-                "name": ($repo + "-" + $tag + "-" + "run-java-21.oci"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build-java-21/run.oci.sha256",
-                "name": ($repo + "-" + $tag + "-" + "run-java-21.oci.sha256"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build-nodejs-16/run.oci",
-                "name": ($repo + "-" + $tag + "-" + "run-nodejs-16.oci"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build-nodejs-16/run.oci.sha256",
-                "name": ($repo + "-" + $tag + "-" + "run-nodejs-16.oci.sha256"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build-nodejs-18/run.oci",
-                "name": ($repo + "-" + $tag + "-" + "run-nodejs-18.oci"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build-nodejs-18/run.oci.sha256",
-                "name": ($repo + "-" + $tag + "-" + "run-nodejs-18.oci.sha256"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build-nodejs-20/run.oci",
-                "name": ($repo + "-" + $tag + "-" + "run-nodejs-20.oci"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build-nodejs-20/run.oci.sha256",
-                "name": ($repo + "-" + $tag + "-" + "run-nodejs-20.oci.sha256"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build/run.oci",
-                "name": ($repo + "-" + $tag + "-" + "run.oci"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build/run.oci.sha256",
-                "name": ($repo + "-" + $tag + "-" + "run.oci.sha256"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build/build.oci",
-                "name": ($repo + "-" + $tag + "-" + "build.oci"),
-                "content_type": "application/gzip"
-              },
-              {
-                "path": "build/build.oci.sha256",
-                "name": ($repo + "-" + $tag + "-" + "build.oci.sha256"),
-                "content_type": "application/gzip"
-              }]')"
-
-          printf "assets=%s\n" "${assets}"
-          printf "assets=%s\n" "${assets}" >> "$GITHUB_OUTPUT"
-
-      - name: Create Release
-        uses: paketo-buildpacks/github-config/actions/release/create@main
-        with:
-          repo: ${{ github.repository }}
-          token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-          tag_name: v${{ steps.tag.outputs.tag }}
-          target_commitish: ${{ github.sha }}
-          name: v${{ steps.tag.outputs.tag }}
-          body: ${{ steps.notes.outputs.release_body }}
-          draft: false
-          assets: ${{ steps.assets.outputs.assets }}
+    - name: Create Release
+      uses: paketo-buildpacks/github-config/actions/release/create@main
+      with:
+        repo: ${{ github.repository }}
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+        tag_name: v${{ needs.release.outputs.tag }}
+        target_commitish: ${{ github.sha }}
+        name: v${{ needs.release.outputs.tag }}
+        body: ${{ fromJson(steps.merge_release_bodies.outputs.release_body).text }}
+        draft: false
+        assets: ${{ steps.merge_release_assets.outputs.assets }}
 
   failure:
     name: Alert on Failure
     runs-on: ubuntu-22.04
-    needs: [create_stack, test, release]
-    if: ${{ always() && needs.create_stack.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' }}
+    needs: [preparation, poll_images, create_stack, diff, test, release, create_release, packages_changed, stack_files_changed]
+    if: ${{ always() && needs.preparation.result == 'failure' || needs.poll_images.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' || needs.create_release.result == 'failure' || needs.packages_changed.result == 'failure' || needs.stack_files_changed.result == 'failure' }}
     steps:
-      - name: File Failure Alert Issue
-        uses: paketo-buildpacks/github-config/actions/issue/file@main
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repo: ${{ github.repository }}
-          label: "failure:release"
-          comment_if_exists: true
-          issue_title: "Failure: Create Release workflow"
-          issue_body: |
-            Create Release workflow [failed](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}).
-            Unable to update ubi images.
-          comment_body: |
-            Another failure occurred: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
+    - name: File Failure Alert Issue
+      uses: paketo-buildpacks/github-config/actions/issue/file@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        repo: ${{ github.repository }}
+        label: "failure:release"
+        comment_if_exists: true
+        issue_title: "Failure: Create Release workflow"
+        issue_body: |
+          Create Release workflow [failed](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}).
+          Unable to update images.
+        comment_body: |
+          Another failure occurred: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
