@@ -119,11 +119,11 @@ jobs:
         output_path: "/github/workspace/previous_${{ matrix.stacks.run_image }}.oci.sha256"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
-    - name: Get current run image hascode of ${{ matrix.stacks.name }} stack
+    - name: Get current run image hash code of ${{ matrix.stacks.name }} stack
       run: |
         skopeo inspect --format "{{.Digest}}" ${{ matrix.stacks.base_run_container_image }} > hash-code-current-run-image-${{ matrix.stacks.name }}
 
-    - name: Get current build image hascode of ${{ matrix.stacks.name }} stack
+    - name: Get current build image hash code of ${{ matrix.stacks.name }} stack
       if: ${{ matrix.stacks.create_build_image == true }}
       run: |
         skopeo inspect --format "{{.Digest}}" ${{ matrix.stacks.base_build_container_image }} > hash-code-current-build-image-${{ matrix.stacks.name }}
@@ -274,29 +274,9 @@ jobs:
       with:
         name: current-run-receipt-${{ matrix.stacks.name }}
 
-    - name: Check for Previous Releases
-      id: check_previous
-      run: |
-        gh auth status
-        # shellcheck disable=SC2046
-        if [ $(gh api "/repos/${{ github.repository }}/releases" | jq -r 'length') -eq 0 ]; then
-          echo "exists=false" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-        echo "exists=true" >> "$GITHUB_OUTPUT"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Write Empty Previous Receipts
-      if: ${{ steps.check_previous.outputs.exists == 'false' }}
-      run: |
-        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
-          echo '{"components":[]}' > "${{ github.workspace }}/previous-build-receipt-${{ matrix.stacks.name }}"
-        fi
-        echo '{"components":[]}' > "${{ github.workspace }}/previous-run-receipt-${{ matrix.stacks.name }}"
-
     - name: Find and Download Previous Build Receipt
-      if: ${{ steps.check_previous.outputs.exists == 'true' && matrix.stacks.create_build_image == true }}
+      id: download_previous_build_receipt
+      if: ${{ matrix.stacks.create_build_image == true }}
       uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
       with:
         asset_pattern: "${{ matrix.stacks.build_receipt_filename }}"
@@ -304,10 +284,9 @@ jobs:
         repo: ${{ github.repository }}
         output_path: "/github/workspace/previous-build-receipt-${{ matrix.stacks.name }}"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-        strict: true
 
     - name: Find and Download Previous Run Receipt
-      if: ${{ steps.check_previous.outputs.exists == 'true' }}
+      id: download_previous_run_receipt
       uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
       with:
         asset_pattern: "${{ matrix.stacks.run_receipt_filename }}"
@@ -315,7 +294,16 @@ jobs:
         repo: ${{ github.repository }}
         output_path: "/github/workspace/previous-run-receipt-${{ matrix.stacks.name }}"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-        strict: true
+
+    - name: Write Empty Previous Run Receipts
+      if: ${{ steps.download_previous_run_receipt.outputs.output_path == '' }}
+      run: |
+        echo '{"components":[]}' > "${{ github.workspace }}/previous-run-receipt-${{ matrix.stacks.name }}"
+
+    - name: Write Empty Previous Build Receipts
+      if: ${{ matrix.stacks.create_build_image == true && steps.download_previous_build_receipt.outputs.output_path == '' }}
+      run: |
+        echo '{"components":[]}' > "${{ github.workspace }}/previous-build-receipt-${{ matrix.stacks.name }}"
 
     - name: Compare Build Packages
       id: build_diff
