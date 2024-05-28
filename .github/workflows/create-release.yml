@@ -508,7 +508,7 @@ jobs:
     name: Release
     runs-on: ubuntu-22.04
     needs: [create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, run_if_packages_removed_with_force, test, force_release_creation, preparation ]
-    if: ${{ needs.diff.result == 'success' && needs.test.result == 'success' && (needs.run_if_packages_changed.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
+    if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' && (needs.run_if_packages_changed.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
     strategy:
       matrix:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
@@ -675,7 +675,7 @@ jobs:
     name: Create Release
     runs-on: ubuntu-22.04
     needs: release
-    if: ${{ needs.release.result == 'success' }}
+    if: ${{ always() && needs.release.result == 'success' }}
     steps:
     - name: download release assets
       uses: actions/download-artifact@v4
