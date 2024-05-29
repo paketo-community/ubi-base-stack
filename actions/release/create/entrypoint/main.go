@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -33,6 +34,7 @@ func main() {
 		Draft          bool
 		Assets         string
 		RetryTimeLimit string
+		BodyFilepath   string
 	}
 
 	flag.StringVar(&config.Endpoint, "endpoint", "https://api.github.com", "Specifies endpoint for sending requests")
@@ -42,6 +44,7 @@ func main() {
 	flag.StringVar(&config.Release.TargetCommitish, "target-commitish", "", "Commitish that is being tagged and released")
 	flag.StringVar(&config.Release.Name, "name", "", "Name of release")
 	flag.StringVar(&config.Release.Body, "body", "", "Contents of release body")
+	flag.StringVar(&config.BodyFilepath, "body-filepath", "", "Path to release body")
 	flag.BoolVar(&config.Draft, "draft", false, "Sets the release as a draft")
 	flag.StringVar(&config.Assets, "assets", "", "JSON-encoded assets metadata")
 	flag.StringVar(&config.RetryTimeLimit, "retry-time-limit", "1m", "How long to retry failures for")
@@ -85,9 +88,23 @@ func main() {
 		}
 	}
 
+	if config.Release.Body == "" && config.BodyFilepath != "" {
+		absolute, err := filepath.Abs(config.BodyFilepath)
+		if err != nil {
+			fail(fmt.Errorf("failed to create absolute path for %s", config.BodyFilepath))
+		}
+		config.BodyFilepath = absolute
+
+		config.Release.Body, err = getDataFromFile(config.BodyFilepath)
+		if err != nil {
+			fail(fmt.Errorf("failed to read file %s: %w", config.BodyFilepath, err))
+		}
+	}
+
 	config.Release.Draft = true
 	body := bytes.NewBuffer(nil)
 	err = json.NewEncoder(body).Encode(config.Release)
+	fmt.Println(body)
 	if err != nil {
 		fail(fmt.Errorf("failed to encode release: %w", err))
 	}
@@ -208,4 +225,15 @@ func main() {
 func fail(err error) {
 	fmt.Printf("Error: %s", err)
 	os.Exit(1)
+}
+
+func getDataFromFile(path string) (string, error) {
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %s: %w", path, err)
+	}
+
+	return string(data), nil
+
 }

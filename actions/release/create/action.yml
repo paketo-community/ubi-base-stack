@@ -50,6 +50,8 @@ runs:
   - ${{ inputs.name }}
   - "--body"
   - ${{ inputs.body }}
+  - "--body-filepath"
+  - ${{ inputs.body_filepath }}
   - "--assets"
   - ${{ inputs.assets }}
   - "--draft=${{ inputs.draft }}"
