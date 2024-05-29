@@ -695,7 +695,7 @@ jobs:
           merged_release_assets=$(jq -s add "$file" <(echo "$merged_release_assets") | jq -c)
         done
 
-        printf "assets=$merged_release_assets" >> "$GITHUB_OUTPUT"
+        printf "assets=%s\n" "${merged_release_assets}" >> "$GITHUB_OUTPUT"
 
     - name: Download release bodies
       uses: actions/download-artifact@v4
@@ -706,17 +706,12 @@ jobs:
     - name: Merge release bodies
       id: merge_release_bodies
       run: |
-        release_body=""
+        touch release_notes
         for filename in release-body-*; do
-          if [[ -n "$release_body" ]]; then
-            release_body+=$'\n'
-          fi
-          release_body+=$(cat "$filename")
+          cat "$filename" >> release_notes
+          echo >> release_notes
         done
 
-        json_release_body=$(jq -c -n --arg content "$release_body" '{text: $content}')
-
-        echo "release_body=$json_release_body" >> $GITHUB_OUTPUT
     #TODO remove before pr
     - name: treeeee
       run: tree .
@@ -758,7 +753,7 @@ jobs:
         tag_name: v${{ needs.release.outputs.tag }}
         target_commitish: ${{ github.sha }}
         name: v${{ needs.release.outputs.tag }}
-        body: ${{ fromJson(steps.merge_release_bodies.outputs.release_body).text }}
+        body_filepath: release_notes
         draft: false
         assets: ${{ steps.merge_release_assets.outputs.assets }}
 
