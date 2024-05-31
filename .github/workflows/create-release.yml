@@ -586,7 +586,6 @@ jobs:
         echo "run_modified=$(jq -c <<< "$(cat run_modified)" )" >> "$GITHUB_OUTPUT"
         echo "run_removed_with_force=$(jq -c <<< "$(cat run_removed_with_force)" )" >> "$GITHUB_OUTPUT"
 
-
     - name: Create Release Notes
       id: notes
       # uses: paketo-community/ubi-base-stack/actions/stack/release-notes@main
@@ -600,6 +599,7 @@ jobs:
         run_packages_added: ${{ steps.release_notes_preparation.outputs.run_added }}
         run_packages_modified: ${{ steps.release_notes_preparation.outputs.run_modified }}
         run_packages_removed_with_force: ${{ steps.release_notes_preparation.outputs.run_removed_with_force }}
+        receipts_show_limit: 16
         supports_usns: ${{ needs.preparation.outputs.support_usns }}
 
     - name: Setup Release Assets
