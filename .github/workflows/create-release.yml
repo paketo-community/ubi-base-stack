@@ -583,7 +583,6 @@ jobs:
         echo "run_modified=$(jq -c <<< "$(cat run_modified)" )" >> "$GITHUB_OUTPUT"
         echo "run_removed_with_force=$(jq -c <<< "$(cat run_removed_with_force)" )" >> "$GITHUB_OUTPUT"
 
-
     - name: Create Release Notes
       id: notes
       uses: paketo-community/ubi-base-stack/actions/stack/release-notes@main
@@ -596,6 +595,7 @@ jobs:
         run_packages_added: ${{ steps.release_notes_preparation.outputs.run_added }}
         run_packages_modified: ${{ steps.release_notes_preparation.outputs.run_modified }}
         run_packages_removed_with_force: ${{ steps.release_notes_preparation.outputs.run_removed_with_force }}
+        receipts_show_limit: 16
         supports_usns: ${{ needs.preparation.outputs.support_usns }}
 
     - name: Setup Release Assets
@@ -691,7 +691,7 @@ jobs:
           merged_release_assets=$(jq -s add "$file" <(echo "$merged_release_assets") | jq -c)
         done
 
-        printf "assets=$merged_release_assets" >> "$GITHUB_OUTPUT"
+        printf "assets=%s\n" "${merged_release_assets}" >> "$GITHUB_OUTPUT"
 
     - name: Download release bodies
       uses: actions/download-artifact@v4
@@ -702,17 +702,11 @@ jobs:
     - name: Merge release bodies
       id: merge_release_bodies
       run: |
-        release_body=""
+        touch release_notes
         for filename in release-body-*; do
-          if [[ -n "$release_body" ]]; then
-            release_body+=$'\n'
-          fi
-          release_body+=$(cat "$filename")
+          cat "$filename" >> release_notes
+          echo >> release_notes
         done
-
-        json_release_body=$(jq -c -n --arg content "$release_body" '{text: $content}')
-
-        echo "release_body=$json_release_body" >> $GITHUB_OUTPUT
 
     - name: Download current build images
       uses: actions/download-artifact@v4
@@ -743,14 +737,14 @@ jobs:
         merge-multiple: true
 
     - name: Create Release
-      uses: paketo-buildpacks/github-config/actions/release/create@main
+      uses: paketo-community/ubi-base-stack/actions/release/create@main
       with:
         repo: ${{ github.repository }}
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
         tag_name: v${{ needs.release.outputs.tag }}
         target_commitish: ${{ github.sha }}
         name: v${{ needs.release.outputs.tag }}
-        body: ${{ fromJson(steps.merge_release_bodies.outputs.release_body).text }}
+        body_filepath: release_notes
         draft: false
         assets: ${{ steps.merge_release_assets.outputs.assets }}
 
