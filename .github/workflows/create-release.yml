@@ -583,6 +583,13 @@ jobs:
         echo "run_modified=$(jq -c <<< "$(cat run_modified)" )" >> "$GITHUB_OUTPUT"
         echo "run_removed_with_force=$(jq -c <<< "$(cat run_removed_with_force)" )" >> "$GITHUB_OUTPUT"
 
+    - name: Fetch Receipts show limit
+      id: fetch_receipts_show_limit
+      run: |
+        if [[ -f ${{ env.STACKS_FILENAME }} ]]; then
+          echo "receipts_show_limit=$( jq -r '.receipts_show_limit // ""' ${{ env.STACKS_FILENAME }} )" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Create Release Notes
       id: notes
       uses: paketo-community/ubi-base-stack/actions/stack/release-notes@main
@@ -595,7 +602,7 @@ jobs:
         run_packages_added: ${{ steps.release_notes_preparation.outputs.run_added }}
         run_packages_modified: ${{ steps.release_notes_preparation.outputs.run_modified }}
         run_packages_removed_with_force: ${{ steps.release_notes_preparation.outputs.run_removed_with_force }}
-        receipts_show_limit: 16
+        receipts_show_limit: ${{ steps.fetch_receipts_show_limit.outputs.receipts_show_limit }}
         supports_usns: ${{ needs.preparation.outputs.support_usns }}
 
     - name: Setup Release Assets
