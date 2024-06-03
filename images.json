@@ -1,6 +1,7 @@
 {
   "support_usns": false,
   "update_on_new_image": true,
+  "receipts_show_limit": 16,
   "images": [
     {
       "name": "default",
