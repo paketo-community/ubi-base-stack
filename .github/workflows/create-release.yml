@@ -744,7 +744,7 @@ jobs:
         merge-multiple: true
 
     - name: Create Release
-      uses: paketo-community/ubi-base-stack/actions/release/create@main
+      uses: paketo-buildpacks/github-config/actions/release/create@main
       with:
         repo: ${{ github.repository }}
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
