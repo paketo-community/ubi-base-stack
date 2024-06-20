@@ -21,9 +21,7 @@ var RegistryUrl string
 
 var builder struct {
 	imageUrl      string
-	buildImageID  string
 	buildImageUrl string
-	runImageID    string
 	runImageUrl   string
 }
 
@@ -100,7 +98,7 @@ func TestAcceptance(t *testing.T) {
 		Execute(settings.Config.GoDist)
 	Expect(err).NotTo(HaveOccurred())
 
-	builder.buildImageID, builder.buildImageUrl, builder.runImageID, builder.runImageUrl, builder.imageUrl, err = utils.GenerateBuilder(root, "build", RegistryUrl)
+	builder.buildImageUrl, builder.runImageUrl, builder.imageUrl, err = utils.GenerateBuilder(root, "build", RegistryUrl)
 	Expect(err).NotTo(HaveOccurred())
 
 	SetDefaultEventuallyTimeout(120 * time.Second)
@@ -115,7 +113,7 @@ func TestAcceptance(t *testing.T) {
 	lifecycleImageID, err := utils.GetLifecycleImageID(docker, builder.imageUrl)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = utils.RemoveImages(docker, []string{builder.buildImageID, builder.runImageID, lifecycleImageID, builder.runImageUrl, builder.imageUrl})
+	err = utils.RemoveImages(docker, []string{lifecycleImageID, builder.runImageUrl, builder.imageUrl})
 	Expect(err).NotTo(HaveOccurred())
 
 }

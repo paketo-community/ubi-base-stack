@@ -13,36 +13,26 @@ import (
 	"github.com/paketo-buildpacks/packit/v2/pexec"
 )
 
-func GenerateBuilder(rootDir string, stackPath string, registryUrl string) (buildImageID string, buildImageUrl string, runImageID string, runImageUrl string, builderImageUrl string, err error) {
+func GenerateBuilder(rootDir string, stackPath string, registryUrl string) (buildImageUrl string, runImageUrl string, builderImageUrl string, err error) {
 
 	buildArchive := filepath.Join(rootDir, "build", "build.oci")
-	buildImageID = fmt.Sprintf("build-image-%s", uuid.NewString())
-	err = archiveToDaemon(buildArchive, buildImageID)
-	if err != nil {
-		return "", "", "", "", "", err
-	}
-
+	buildImageID := fmt.Sprintf("build-image-%s", uuid.NewString())
 	buildImageUrl, err = PushFileToLocalRegistry(buildArchive, registryUrl, buildImageID)
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", err
 	}
 
 	runArchive := filepath.Join(rootDir, stackPath, "run.oci")
-	runImageID = fmt.Sprintf("run-image-%s", uuid.NewString())
-	err = archiveToDaemon(runArchive, runImageID)
-	if err != nil {
-		return "", "", "", "", "", err
-	}
-
+	runImageID := fmt.Sprintf("run-image-%s", uuid.NewString())
 	runImageUrl, err = PushFileToLocalRegistry(runArchive, registryUrl, runImageID)
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", err
 	}
 
 	// Creating builder file
 	builderConfigFile, err := os.CreateTemp("", "builder.toml")
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", err
 	}
 
 	builderConfigFilepath := builderConfigFile.Name()
@@ -55,7 +45,7 @@ func GenerateBuilder(rootDir string, stackPath string, registryUrl string) (buil
 			`, buildImageUrl, runImageUrl)
 
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", err
 	}
 
 	// naming builder and pushing it to registry with pack cli
@@ -77,27 +67,15 @@ func GenerateBuilder(rootDir string, stackPath string, registryUrl string) (buil
 	})
 
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", err
 	}
 
 	err = os.RemoveAll(builderConfigFilepath)
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", err
 	}
 
-	return buildImageID, buildImageUrl, runImageID, runImageUrl, builderImageUrl, nil
-}
-
-func archiveToDaemon(path, id string) error {
-	skopeo := pexec.NewExecutable("skopeo")
-
-	return skopeo.Execute(pexec.Execution{
-		Args: []string{
-			"copy",
-			fmt.Sprintf("oci-archive:%s", path),
-			fmt.Sprintf("docker-daemon:%s:latest", id),
-		},
-	})
+	return buildImageUrl, runImageUrl, builderImageUrl, nil
 }
 
 func PushFileToLocalRegistry(filePath string, registryUrl string, imageName string) (string, error) {
