@@ -5,14 +5,8 @@ set -o pipefail
 
 readonly PROG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly STACK_DIR="$(cd "${PROG_DIR}/.." && pwd)"
-readonly OUTPUT_DIR="${STACK_DIR}/build"
-readonly OUTPUT_DIR_NODEJS16="${STACK_DIR}/build-nodejs-16"
-readonly OUTPUT_DIR_NODEJS18="${STACK_DIR}/build-nodejs-18"
-readonly OUTPUT_DIR_NODEJS20="${STACK_DIR}/build-nodejs-20"
-readonly OUTPUT_DIR_JAVA8="${STACK_DIR}/build-java-8"
-readonly OUTPUT_DIR_JAVA11="${STACK_DIR}/build-java-11"
-readonly OUTPUT_DIR_JAVA17="${STACK_DIR}/build-java-17"
-readonly OUTPUT_DIR_JAVA21="${STACK_DIR}/build-java-21"
+readonly IMAGES_JSON="${STACK_DIR}/images.json"
+readonly INTEGRATION_JSON="${STACK_DIR}/integration.json"
 
 # shellcheck source=SCRIPTDIR/.util/tools.sh
 source "${PROG_DIR}/.util/tools.sh"
@@ -21,13 +15,11 @@ source "${PROG_DIR}/.util/tools.sh"
 source "${PROG_DIR}/.util/print.sh"
 
 function main() {
-  local clean token
+  local clean token registryPort registryPid localRegistry setupLocalRegistry
   clean="false"
   token=""
-
-  local regport create_registry
-  regport=""
-  create_registry="true"
+  registryPid=""
+  setupLocalRegistry=""
 
   while [[ "${#}" != 0 ]]; do
     case "${1}" in
@@ -47,11 +39,6 @@ function main() {
         shift 2
         ;;
 
-    --regport | -p)
-      regport="${2}"
-      shift 2
-      ;;
-
       "")
         # skip if the argument is empty
         shift 1
@@ -66,71 +53,78 @@ function main() {
 
   if [[ "${clean}" == "true" ]]; then
     util::print::title "Cleaning up preexisting stack archives..."
-    rm -rf "${OUTPUT_DIR}"
-    rm -rf "${OUTPUT_DIR_NODEJS16}"
-    rm -rf "${OUTPUT_DIR_NODEJS18}"
-    rm -rf "${OUTPUT_DIR_NODEJS20}"
-    rm -rf "${OUTPUT_DIR_JAVA8}"
-    rm -rf "${OUTPUT_DIR_JAVA11}"
-    rm -rf "${OUTPUT_DIR_JAVA17}"    
-    rm -rf "${OUTPUT_DIR_JAVA21}"
+    clean::stacks
   fi
 
-  if ! [[ -f "${OUTPUT_DIR}/build.oci" ]] || \
-     ! [[ -f "${OUTPUT_DIR}/run.oci" ]] || \
-     ! [[ -f "${OUTPUT_DIR_NODEJS16}/run.oci" ]] || \
-     ! [[ -f "${OUTPUT_DIR_NODEJS18}/run.oci" ]] || \
-     ! [[ -f "${OUTPUT_DIR_NODEJS20}/run.oci" ]] || \
-     ! [[ -f "${OUTPUT_DIR_JAVA8}/run.oci" ]]  || \
-     ! [[ -f "${OUTPUT_DIR_JAVA11}/run.oci" ]]  || \
-     ! [[ -f "${OUTPUT_DIR_JAVA17}/run.oci" ]]  || \
-     ! [[ -f "${OUTPUT_DIR_JAVA21}/run.oci" ]]; then
+  stack_output_builds_exist=$(stack_builds_exist)
+
+  if [[ "${stack_output_builds_exist}" == "false" ]]; then
     util::print::title "Creating stack..."
     "${STACK_DIR}/scripts/create.sh"
   fi
 
-  if [[ -z "${regport:-}" ]]; then
-    regport="5000"
+  if [[ -f $INTEGRATION_JSON ]]; then
+    setupLocalRegistry=$(jq '.setup_local_registy' $INTEGRATION_JSON)
   fi
 
-  util::print::title "Setting up local registry"
+  echo $setupLocalRegistry
 
-  registry_container_id=$(util::tools::setup_local_registry "$regport")
+  if [[ "${setupLocalRegistry}" == "true" ]]; then
+    registryPort=$(get::random::port)
+    registryPid=$(local::registry::start $registryPort)
+    localRegistry="127.0.0.1:$registryPort"
+    export REGISTRY_URL="${localRegistry}"
+  fi
 
-  export REGISTRY_URL="localhost:${regport}"
+  tests::run
 
-  tests::run "${registry_container_id}"
+  if [[ "${setupLocalRegistry}" == "true" ]]; then
+    kill $registryPid
+  fi
+}
 
-  util::tools::cleanup_local_registry "${registry_container_id}"
+function join_by {
+  local d=${1-} f=${2-}
+  if shift 2; then
+    printf %s "$f" "${@/#/$d}"
+  fi
 }
 
 function usage() {
+  oci_images_arr=()
+
+  if [ -f "${IMAGES_JSON}" ]; then
+    local images=$(jq -c '.images[]' "${IMAGES_JSON}")
+
+    while read -r image; do
+      output_dir=$(echo "${image}" | jq -r '.output_dir')
+      build_image=$(echo "${image}" | jq -r '.build_image')
+      create_build_image=$(echo "${image}" | jq -r '.create_build_image')
+      run_image=$(echo "${image}" | jq -r '.run_image')
+      
+      if [ $create_build_image == 'true' ]; then
+        oci_images_arr+=("${STACK_DIR}/${output_dir}/${build_image}.oci")
+      fi
+
+      oci_images_arr+=("${STACK_DIR}/${output_dir}/${run_image}.oci")
+
+    done <<<"$images"
+  else
+    oci_images_arr+=("${STACK_DIR}/build/build.oci")
+    oci_images_arr+=("${STACK_DIR}/build/run.oci") 
+  fi
+
+  joined_oci_images=$(join_by $'\nand\n' ${oci_images_arr[*]})
+
   cat <<-USAGE
 test.sh [OPTIONS]
 
 Runs acceptance tests against the stack. Uses the OCI images
-${STACK_DIR}/build/build.oci
-and
-${STACK_DIR}/build/run.oci
-and
-${STACK_DIR}/build-nodejs-16/run.oci
-and
-${STACK_DIR}/build-nodejs-18/run.oci
-and
-${STACK_DIR}/build-nodejs-20/run.oci
-and
-${STACK_DIR}/build-java-8/run.oci
-and
-${STACK_DIR}/build-java-11/run.oci
-and
-${STACK_DIR}/build-java-17/run.oci
-and
-${STACK_DIR}/build-java-21/run.oci
+${joined_oci_images}
 if they exist. Otherwise, first runs create.sh to create them.
 
 OPTIONS
   --clean          -c  clears contents of stack output directory before running tests
-  --regport <port> -p  Local port to use for local registry during tests, defaults to 5000
   --token <token>  -t  Token used to download assets from GitHub (e.g. jam, pack, etc) (optional)
   --help           -h  prints the command usage
 USAGE
@@ -149,12 +143,13 @@ function tools::install() {
     --token "${token}"
 
   util::tools::skopeo::check
+
+  util::tools::crane::install \
+    --directory "${STACK_DIR}/.bin" \
+    --token "${token}"
 }
 
 function tests::run() {
-  local registry_container_id
-  registry_container_id="${1}"
-
   util::print::title "Run Stack Acceptance Tests"
 
   export CGO_ENABLED=0
@@ -162,37 +157,43 @@ function tests::run() {
   pushd "${STACK_DIR}" > /dev/null
     if GOMAXPROCS="${GOMAXPROCS:-4}" go test -count=1 -timeout 0 ./... -v -run Acceptance | tee "${testout}"; then
       util::tools::tests::checkfocus "${testout}"
-      util::tools::cleanup_local_registry "${registry_container_id}"
       util::print::success "** GO Test Succeeded **"
     else
-      util::tools::cleanup_local_registry "${registry_container_id}"
       util::print::error "** GO Test Failed **"
     fi
   popd > /dev/null
 }
 
+function stack_builds_exist() {
 
-function util::tools::setup_local_registry() {
+  local stack_output_builds_exist="true"
+  if [ -f "${IMAGES_JSON}" ]; then
 
-  registry_port="${1}"
+    local images=$(jq -c '.images[]' "${IMAGES_JSON}")
 
-  local registry_container_id
-  if [[ "$(curl -s -o /dev/null -w "%{http_code}" localhost:$registry_port/v2/)" == "200" ]]; then
-    registry_container_id=""
+    while IFS= read -r image; do
+      stack_output_dir=$(echo "${image}" | jq -r '.output_dir')
+      if ! [[ -f "${STACK_DIR}/${stack_output_dir}/build.oci" ]] || ! [[ -f "${STACK_DIR}/${stack_output_dir}/run.oci" ]]; then
+        stack_output_builds_exist="false"
+      fi
+    done <<<"$images"
   else
-    registry_container_id=$(docker run -d -p "${registry_port}:5000" --restart=always registry:2)
+    if ! [[ -f "${STACK_DIR}/build/build.oci" ]] || ! [[ -f "${STACK_DIR}/build/run.oci" ]]; then
+      stack_output_builds_exist="false"
+    fi
   fi
 
-  echo $registry_container_id
+  echo "$stack_output_builds_exist"
 }
 
-function util::tools::cleanup_local_registry() {
-  local registry_container_id
-  registry_container_id="${1}"
-
-  if [[ -n "${registry_container_id}" ]]; then
-    docker stop $registry_container_id
-    docker rm $registry_container_id
+function clean::stacks(){
+  if [ -f "${IMAGES_JSON}" ]; then
+    jq -c '.images[]' "${IMAGES_JSON}" | while read -r image; do
+      output_dir=$(echo "${image}" | jq -r '.output_dir')
+      rm -rf "${STACK_DIR}/${output_dir}"
+    done
+  else
+    rm -rf "${STACK_DIR}/build"
   fi
 }
 
