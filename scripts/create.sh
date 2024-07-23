@@ -64,6 +64,9 @@ function main() {
 
   tools::install
 
+  # we need to copy images.json for inclusion in the build image
+  cp images.json stack
+
   # if stack or build argument is provided but not both, then throw an error
   if [[ -n "${stack_dir_name}" && ! -n "${build_dir_name}" ]] || [[ ! -n "${stack_dir_name}" && -n "${build_dir_name}" ]]; then
     util::print::error "Both stack-dir and build-dir must be provided"
