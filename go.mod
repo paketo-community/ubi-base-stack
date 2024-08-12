@@ -1,6 +1,6 @@
 module github.com/paketo-community/ubi-base-stack
 
-go 1.22.5
+go 1.22.6
 
 require (
 	github.com/google/go-containerregistry v0.17.0
