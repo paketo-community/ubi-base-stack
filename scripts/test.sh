@@ -16,10 +16,11 @@ source "${PROG_DIR}/.util/tools.sh"
 source "${PROG_DIR}/.util/print.sh"
 
 function main() {
-  local clean token registryPort registryPid localRegistry setupLocalRegistry
+  local clean token test_only_stacks registryPort registryPid localRegistry setupLocalRegistry
   help=""
   clean="false"
   token=""
+  test_only_stacks=""
   registryPid=""
   setupLocalRegistry=""
 
@@ -40,6 +41,11 @@ function main() {
         shift 2
         ;;
 
+      --test-only-stacks)
+        test_only_stacks="${2}"
+        shift 2
+        ;;
+
       "")
         # skip if the argument is empty
         shift 1
@@ -51,10 +57,10 @@ function main() {
   done
 
   if [ -f "${STACK_IMAGES_JSON_PATH}" ]; then
-    STACK_IMAGES=$(jq -c '.images[]' "${STACK_IMAGES_JSON_PATH}")
+    get_stack_images=$(jq -c '.' "${STACK_IMAGES_JSON_PATH}")
   else
     # If there is no images.json file, fallback to the default image configuration
-    STACK_IMAGES=$(jq -nc '{
+    get_stack_images=$(jq -nc '{
   "images": [
     {
       "output_dir": "build",
@@ -64,6 +70,17 @@ function main() {
     }
   ]
 }' | jq -c '.images[]')
+  fi
+
+  if [[ -n "${test_only_stacks}" ]]; then
+    export TEST_ONLY_STACKS="${test_only_stacks}"
+    filter_stacks=$(echo $TEST_ONLY_STACKS | jq -R 'split(" ")')
+    STACK_IMAGES=$(echo "${get_stack_images}" | \
+      jq --argjson names "$filter_stacks" -c \
+      '.images[] | select(.name | IN($names[]))')
+  else
+    export TEST_ONLY_STACKS=""
+    STACK_IMAGES=$(echo "${get_stack_images}" | jq -c '.images[]')
   fi
 
   if [[ "${help}" == "true" ]]; then
@@ -80,9 +97,19 @@ function main() {
 
   stack_output_builds_exist=$(stack_builds_exist)
 
+  util::print::title "Creating stack..."
   if [[ "${stack_output_builds_exist}" == "false" ]]; then
-    util::print::title "Creating stack..."
-    "${STACK_DIR}/scripts/create.sh"
+    if [[ -n "${TEST_ONLY_STACKS}" ]]; then
+      while read -r image; do
+        config_dir=$(echo "${image}" | jq -r '.config_dir')
+        output_dir=$(echo "${image}" | jq -r '.output_dir')
+        "${STACK_DIR}/scripts/create.sh" \
+          --stack-dir "${config_dir}" \
+          --build-dir "${output_dir}"
+      done <<<"$STACK_IMAGES"
+    else
+      "${STACK_DIR}/scripts/create.sh"
+    fi
   fi
 
   if [[ -f $INTEGRATION_JSON ]]; then
@@ -139,6 +166,7 @@ if they exist. Otherwise, first runs create.sh to create them.
 OPTIONS
   --clean          -c  clears contents of stack output directory before running tests
   --token <token>  -t  Token used to download assets from GitHub (e.g. jam, pack, etc) (optional)
+  --test-only-stacks   Runs the tests of the stacks passed to this argument (e.g. java-8 nodejs-16) (optional)
   --help           -h  prints the command usage
 USAGE
 }
