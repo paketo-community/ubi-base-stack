@@ -5,8 +5,9 @@ set -o pipefail
 
 readonly PROG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly STACK_DIR="$(cd "${PROG_DIR}/.." && pwd)"
-readonly IMAGES_JSON="${STACK_DIR}/images.json"
+readonly STACK_IMAGES_JSON_PATH="${STACK_DIR}/images.json"
 readonly INTEGRATION_JSON="${STACK_DIR}/integration.json"
+declare STACK_IMAGES
 
 # shellcheck source=SCRIPTDIR/.util/tools.sh
 source "${PROG_DIR}/.util/tools.sh"
@@ -16,6 +17,7 @@ source "${PROG_DIR}/.util/print.sh"
 
 function main() {
   local clean token registryPort registryPid localRegistry setupLocalRegistry
+  help=""
   clean="false"
   token=""
   registryPid=""
@@ -25,8 +27,7 @@ function main() {
     case "${1}" in
       --help|-h)
         shift 1
-        usage
-        exit 0
+        help="true"
         ;;
 
       --clean|-c)
@@ -49,6 +50,27 @@ function main() {
     esac
   done
 
+  if [ -f "${STACK_IMAGES_JSON_PATH}" ]; then
+    STACK_IMAGES=$(jq -c '.images[]' "${STACK_IMAGES_JSON_PATH}")
+  else
+    # If there is no images.json file, fallback to the default image configuration
+    STACK_IMAGES=$(jq -nc '{
+  "images": [
+    {
+      "output_dir": "build",
+      "build_image": "build",
+      "run_image": "run",
+      "create_build_image": true
+    }
+  ]
+}' | jq -c '.images[]')
+  fi
+
+  if [[ "${help}" == "true" ]]; then
+    usage
+    exit 0
+  fi
+
   tools::install "${token}"
 
   if [[ "${clean}" == "true" ]]; then
@@ -66,8 +88,6 @@ function main() {
   if [[ -f $INTEGRATION_JSON ]]; then
     setupLocalRegistry=$(jq '.setup_local_registy' $INTEGRATION_JSON)
   fi
-
-  echo $setupLocalRegistry
 
   if [[ "${setupLocalRegistry}" == "true" ]]; then
     registryPort=$(get::random::port)
@@ -93,26 +113,19 @@ function join_by {
 function usage() {
   oci_images_arr=()
 
-  if [ -f "${IMAGES_JSON}" ]; then
-    local images=$(jq -c '.images[]' "${IMAGES_JSON}")
+  while read -r image; do
+    output_dir=$(echo "${image}" | jq -r '.output_dir')
+    build_image=$(echo "${image}" | jq -r '.build_image')
+    create_build_image=$(echo "${image}" | jq -r '.create_build_image')
+    run_image=$(echo "${image}" | jq -r '.run_image')
 
-    while read -r image; do
-      output_dir=$(echo "${image}" | jq -r '.output_dir')
-      build_image=$(echo "${image}" | jq -r '.build_image')
-      create_build_image=$(echo "${image}" | jq -r '.create_build_image')
-      run_image=$(echo "${image}" | jq -r '.run_image')
-      
-      if [ $create_build_image == 'true' ]; then
-        oci_images_arr+=("${STACK_DIR}/${output_dir}/${build_image}.oci")
-      fi
+    if [ $create_build_image == 'true' ]; then
+      oci_images_arr+=("${STACK_DIR}/${output_dir}/${build_image}.oci")
+    fi
 
-      oci_images_arr+=("${STACK_DIR}/${output_dir}/${run_image}.oci")
+    oci_images_arr+=("${STACK_DIR}/${output_dir}/${run_image}.oci")
 
-    done <<<"$images"
-  else
-    oci_images_arr+=("${STACK_DIR}/build/build.oci")
-    oci_images_arr+=("${STACK_DIR}/build/run.oci") 
-  fi
+  done <<<"$STACK_IMAGES"
 
   joined_oci_images=$(join_by $'\nand\n' ${oci_images_arr[*]})
 
@@ -167,34 +180,22 @@ function tests::run() {
 function stack_builds_exist() {
 
   local stack_output_builds_exist="true"
-  if [ -f "${IMAGES_JSON}" ]; then
 
-    local images=$(jq -c '.images[]' "${IMAGES_JSON}")
-
-    while IFS= read -r image; do
-      stack_output_dir=$(echo "${image}" | jq -r '.output_dir')
-      if ! [[ -f "${STACK_DIR}/${stack_output_dir}/build.oci" ]] || ! [[ -f "${STACK_DIR}/${stack_output_dir}/run.oci" ]]; then
-        stack_output_builds_exist="false"
-      fi
-    done <<<"$images"
-  else
-    if ! [[ -f "${STACK_DIR}/build/build.oci" ]] || ! [[ -f "${STACK_DIR}/build/run.oci" ]]; then
+  while IFS= read -r image; do
+    stack_output_dir=$(echo "${image}" | jq -r '.output_dir')
+    if ! [[ -f "${STACK_DIR}/${stack_output_dir}/build.oci" ]] || ! [[ -f "${STACK_DIR}/${stack_output_dir}/run.oci" ]]; then
       stack_output_builds_exist="false"
     fi
-  fi
+  done <<<"$STACK_IMAGES"
 
   echo "$stack_output_builds_exist"
 }
 
 function clean::stacks(){
-  if [ -f "${IMAGES_JSON}" ]; then
-    jq -c '.images[]' "${IMAGES_JSON}" | while read -r image; do
-      output_dir=$(echo "${image}" | jq -r '.output_dir')
-      rm -rf "${STACK_DIR}/${output_dir}"
-    done
-  else
-    rm -rf "${STACK_DIR}/build"
-  fi
+  while read -r image; do
+    output_dir=$(echo "${image}" | jq -r '.output_dir')
+    rm -rf "${STACK_DIR}/${output_dir}"
+  done <<<"$STACK_IMAGES"
 }
 
 main "${@:-}"
