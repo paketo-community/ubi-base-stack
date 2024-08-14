@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/paketo-buildpacks/occam"
-	structs "github.com/paketo-community/ubi-base-stack/internal/structs"
 	utils "github.com/paketo-community/ubi-base-stack/internal/utils"
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
@@ -37,7 +37,7 @@ type ImagesJson struct {
 	SupportUsns       bool          `json:"support_usns"`
 	UpdateOnNewImage  bool          `json:"update_on_new_image"`
 	ReceiptsShowLimit int           `json:"receipts_show_limit"`
-	Images            []StackImages `json:"images"`
+	StackImages       []StackImages `json:"images"`
 }
 
 var builder struct {
@@ -70,20 +70,14 @@ var settings struct {
 		UbiNodejsExtension string `json:"ubi-nodejs-extension"`
 		Nodejs             string `json:"nodejs"`
 		GoDist             string `json:"go-dist"`
-		NodeMajorVersions  []int  `json:"nodejs-major-versions"`
 	}
 
-	Stacks []structs.Stack
 	ImagesJson ImagesJson
 }
 
 func by(_ string, f func()) { f() }
 
 func TestAcceptance(t *testing.T) {
-
-	for _, nodeMajorVersion := range settings.Config.NodeMajorVersions {
-		settings.Stacks = append(settings.Stacks, structs.NewStack(nodeMajorVersion, "nodejs", root))
-	}
 
 	var err error
 	Expect := NewWithT(t).Expect
@@ -107,6 +101,25 @@ func TestAcceptance(t *testing.T) {
 
 	Expect(json.NewDecoder(images_json).Decode(&settings.ImagesJson)).To(Succeed())
 	Expect(images_json.Close()).To(Succeed())
+
+	testOnlyStacksEnv := os.Getenv("TEST_ONLY_STACKS")
+	var testOnlystacks []string
+
+	if testOnlyStacksEnv != "" {
+		testOnlystacks = strings.Split(testOnlyStacksEnv, " ")
+	}
+
+	if len(testOnlystacks) > 0 {
+		var filteredStacks []StackImages
+		for _, stack := range settings.ImagesJson.StackImages {
+			for _, testStack := range testOnlystacks {
+				if stack.Name == testStack {
+					filteredStacks = append(filteredStacks, stack)
+				}
+			}
+		}
+		settings.ImagesJson.StackImages = filteredStacks
+	}
 
 	buildpackStore := occam.NewBuildpackStore()
 
