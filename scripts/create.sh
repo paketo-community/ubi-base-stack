@@ -64,15 +64,17 @@ function main() {
 
   tools::install
 
+  if [ -f "${IMAGES_JSON}" ]; then
+    # we need to copy images.json for inclusion in the build image
+    cp $IMAGES_JSON "${ROOT_DIR}/stack"
+  fi
+
   # if stack or build argument is provided but not both, then throw an error
   if [[ -n "${stack_dir_name}" && ! -n "${build_dir_name}" ]] || [[ ! -n "${stack_dir_name}" && -n "${build_dir_name}" ]]; then
     util::print::error "Both stack-dir and build-dir must be provided"
   elif [[ -n "${stack_dir_name}" && -n "${build_dir_name}" ]]; then
     stack::create "${ROOT_DIR}/${stack_dir_name}" "${ROOT_DIR}/${build_dir_name}" "${flags[@]}"
   elif [ -f "${IMAGES_JSON}" ]; then
-    # we need to copy images.json for inclusion in the build image
-    cp images.json stack
-
     jq -c '.images[]' "${IMAGES_JSON}" | while read -r image; do
       config_dir=$(echo "${image}" | jq -r '.config_dir')
       output_dir=$(echo "${image}" | jq -r '.output_dir')
