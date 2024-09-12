@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	"github.com/google/uuid"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/paketo-buildpacks/occam"
 	. "github.com/paketo-buildpacks/occam/matchers"
-	structs "github.com/paketo-community/ubi-base-stack/internal/structs"
 	utils "github.com/paketo-community/ubi-base-stack/internal/utils"
 )
 
@@ -59,18 +59,19 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 			Expect(docker.Image.Remove.Execute(bpUbiRunImageOverrideImageID)).To(Succeed())
 		})
 
-		var stacks []structs.Stack
+		nodejsRegex, _ := regexp.Compile("^nodejs")
 
-		for _, nodeMajorVersion := range settings.Config.NodeMajorVersions {
-			stacks = append(stacks, structs.NewStack(nodeMajorVersion, "nodejs", root))
-		}
-
-		for _, stack := range stacks {
-			// Create a copy of the stack to get the value and instead of the pointer
+		for _, stack := range settings.ImagesJson.StackImages {
+			// Create a copy of the stack to get the value instead of a pointer
 			stack := stack
-			it(fmt.Sprintf("it successfully builds an app using Nodejs %d run image", stack.MajorVersion), func() {
-				runArchive := filepath.Join(root, stack.Path, "run.oci")
-				bpUbiRunImageOverrideImageID, err = utils.PushFileToLocalRegistry(runArchive, RegistryUrl, fmt.Sprintf("run-%s-%d-%s", stack.Engine, stack.MajorVersion, uuid.NewString()))
+
+			if !nodejsRegex.MatchString(stack.Name) {
+				continue
+			}
+
+			it(fmt.Sprintf("it successfully builds an app using %s run image", stack.Name), func() {
+				runArchive := filepath.Join(root, stack.OutputDir, "run.oci")
+				bpUbiRunImageOverrideImageID, err = utils.PushFileToLocalRegistry(runArchive, RegistryUrl, fmt.Sprintf("run-%s-%s", stack.Name, uuid.NewString()))
 				Expect(err).NotTo(HaveOccurred())
 
 				image, _, err = pack.Build.
@@ -94,7 +95,8 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(container).Should(Serve("Hello World!"))
-				Eventually(container).Should(Serve(MatchRegexp(fmt.Sprintf(`v%d.*`, stack.MajorVersion))).OnPort(8080).WithEndpoint("/node/version"))
+				nodejsMajorVersion := stack.Name[len("nodejs-"):]
+				Eventually(container).Should(Serve(MatchRegexp(fmt.Sprintf(`v%s.*`, nodejsMajorVersion))).OnPort(8080).WithEndpoint("/node/version"))
 			})
 		}
 	})

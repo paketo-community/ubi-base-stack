@@ -3,8 +3,5 @@
   "ubi-nodejs-extension": "github.com/paketo-community/ubi-nodejs-extension",
   "nodejs": "github.com/paketo-buildpacks/nodejs",
   "go-dist": "github.com/paketo-buildpacks/go-dist",
-  "nodejs-major-versions": [
-    16, 18, 20
-  ],
   "setup_local_registy": true
 }
