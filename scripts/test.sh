@@ -57,32 +57,35 @@ function main() {
   done
 
   if [ -f "${STACK_IMAGES_JSON_PATH}" ]; then
-    get_stack_images=$(jq -c '.' "${STACK_IMAGES_JSON_PATH}")
+    all_stack_images=$(jq -c '.' "${STACK_IMAGES_JSON_PATH}")
   else
     # If there is no images.json file, fallback to the default image configuration
-    get_stack_images=$(jq -nc '{
+    all_stack_images=$(jq -nc '{
   "images": [
     {
+      "config_dir": "stack",
       "output_dir": "build",
       "build_image": "build",
       "run_image": "run",
       "create_build_image": true
     }
   ]
-}' | jq -c '.images[]')
+}' | jq -c '.')
   fi
 
   if [[ -n "${test_only_stacks}" ]]; then
-    export TEST_ONLY_STACKS="${test_only_stacks}"
-    filter_stacks=$(echo $TEST_ONLY_STACKS | jq -R 'split(" ")')
-    STACK_IMAGES=$(echo "${get_stack_images}" | \
+    filter_stacks=$(echo $test_only_stacks | jq -R 'split(" ")')
+    STACK_IMAGES=$(echo "${all_stack_images}" | \
       jq --argjson names "$filter_stacks" -c \
       '.images[] | select(.name | IN($names[]))')
+    export TEST_ONLY_STACKS="${test_only_stacks}"
   else
+    STACK_IMAGES=$(echo "${all_stack_images}" | jq -c '.images[]')
     export TEST_ONLY_STACKS=""
-    STACK_IMAGES=$(echo "${get_stack_images}" | jq -c '.images[]')
   fi
 
+  ## The help is after the image parsing and filtering in order to output 
+  ## proper usage information based on the images that are available
   if [[ "${help}" == "true" ]]; then
     usage
     exit 0
@@ -99,17 +102,13 @@ function main() {
 
   util::print::title "Creating stack..."
   if [[ "${stack_output_builds_exist}" == "false" ]]; then
-    if [[ -n "${TEST_ONLY_STACKS}" ]]; then
-      while read -r image; do
-        config_dir=$(echo "${image}" | jq -r '.config_dir')
-        output_dir=$(echo "${image}" | jq -r '.output_dir')
-        "${STACK_DIR}/scripts/create.sh" \
-          --stack-dir "${config_dir}" \
-          --build-dir "${output_dir}"
-      done <<<"$STACK_IMAGES"
-    else
-      "${STACK_DIR}/scripts/create.sh"
-    fi
+    while read -r image; do
+      config_dir=$(echo "${image}" | jq -r '.config_dir')
+      output_dir=$(echo "${image}" | jq -r '.output_dir')
+      "${STACK_DIR}/scripts/create.sh" \
+        --stack-dir "${config_dir}" \
+        --build-dir "${output_dir}"
+    done <<<"$STACK_IMAGES"
   fi
 
   if [[ -f $INTEGRATION_JSON ]]; then
