@@ -5,7 +5,7 @@
   "images": [
     {
       "name": "default",
-      "config_dir": "stacks/stack",
+      "config_dir": "stack",
       "output_dir": "build",
       "build_image": "build",
       "run_image": "run",
@@ -17,7 +17,7 @@
     },
     {
       "name": "java-8",
-      "config_dir": "stacks/stack-java-8",
+      "config_dir": "stack-java-8",
       "output_dir": "build-java-8",
       "build_image": "build-java-8",
       "run_image": "run-java-8",
@@ -27,7 +27,7 @@
     },
     {
       "name": "java-11",
-      "config_dir": "stacks/stack-java-11",
+      "config_dir": "stack-java-11",
       "output_dir": "build-java-11",
       "build_image": "build-java-11",
       "run_image": "run-java-11",
@@ -37,7 +37,7 @@
     },
     {
       "name": "java-17",
-      "config_dir": "stacks/stack-java-17",
+      "config_dir": "stack-java-17",
       "output_dir": "build-java-17",
       "build_image": "build-java-17",
       "run_image": "run-java-17",
@@ -47,7 +47,7 @@
     },
     {
       "name": "java-21",
-      "config_dir": "stacks/stack-java-21",
+      "config_dir": "stack-java-21",
       "output_dir": "build-java-21",
       "build_image": "build-java-21",
       "run_image": "run-java-21",
@@ -57,7 +57,7 @@
     },
     {
       "name": "nodejs-16",
-      "config_dir": "stacks/stack-nodejs-16",
+      "config_dir": "stack-nodejs-16",
       "output_dir": "build-nodejs-16",
       "build_image": "build-nodejs-16",
       "run_image": "run-nodejs-16",
@@ -67,7 +67,7 @@
     },
     {
       "name": "nodejs-18",
-      "config_dir": "stacks/stack-nodejs-18",
+      "config_dir": "stack-nodejs-18",
       "output_dir": "build-nodejs-18",
       "build_image": "build-nodejs-18",
       "run_image": "run-nodejs-18",
@@ -78,7 +78,7 @@
     {
       "name": "nodejs-20",
       "is_default_run_image": true,
-      "config_dir": "stacks/stack-nodejs-20",
+      "config_dir": "stack-nodejs-20",
       "output_dir": "build-nodejs-20",
       "build_image": "build-nodejs-20",
       "run_image": "run-nodejs-20",
