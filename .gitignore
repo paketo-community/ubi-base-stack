@@ -1,3 +1,3 @@
 .bin/
 builds/
-stack/images.json
+stacks/stack/images.json

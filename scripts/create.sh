@@ -66,7 +66,7 @@ function main() {
 
   if [ -f "${IMAGES_JSON}" ]; then
     # we need to copy images.json for inclusion in the build image
-    cp $IMAGES_JSON "${ROOT_DIR}/stack"
+    cp $IMAGES_JSON "${ROOT_DIR}/stacks/stack/"
   fi
 
   # if stack or build argument is provided but not both, then throw an error
