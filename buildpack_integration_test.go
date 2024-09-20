@@ -40,7 +40,7 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 		docker = occam.NewDocker()
 	})
 
-	context("When building an app using default stack", func() {
+	context("When building GO app using default stack", func() {
 
 		it.After(func() {
 			Expect(docker.Container.Remove.Execute(container.ID)).To(Succeed())
@@ -67,7 +67,7 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 			}
 
 			it("should successfully build a go app", func() {
-				_, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(root, "build", RegistryUrl)
+				_, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(root, stack.OutputDir, RegistryUrl)
 				Expect(err).NotTo(HaveOccurred())
 
 				image, _, err = pack.WithNoColor().Build.
@@ -100,7 +100,7 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 		}
 	})
 
-	context("When building an app using Node.js stacks", func() {
+	context("When building a GO app using Node.js stacks", func() {
 
 		it.After(func() {
 			Expect(docker.Container.Remove.Execute(container.ID)).To(Succeed())
