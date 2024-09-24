@@ -22,7 +22,7 @@ on:
 
 concurrency: release
 env:
-  STACKS_FILENAME: "images.json"
+  STACKS_FILENAME: "stacks/images.json"
 
 jobs:
   preparation:

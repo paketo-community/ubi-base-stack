@@ -97,7 +97,7 @@ func TestAcceptance(t *testing.T) {
 	Expect(json.NewDecoder(integration_json).Decode(&settings.Config)).To(Succeed())
 	Expect(integration_json.Close()).To(Succeed())
 
-	images_json, err := os.Open("./images.json")
+	images_json, err := os.Open("./stacks/images.json")
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(json.NewDecoder(images_json).Decode(&settings.ImagesJson)).To(Succeed())
