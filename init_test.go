@@ -18,6 +18,7 @@ import (
 
 var root string
 var RegistryUrl string
+var DefaultStack StackImages
 
 type StackImages struct {
 	Name                    string `json:"name"`
@@ -96,7 +97,7 @@ func TestAcceptance(t *testing.T) {
 	Expect(json.NewDecoder(integration_json).Decode(&settings.Config)).To(Succeed())
 	Expect(integration_json.Close()).To(Succeed())
 
-	images_json, err := os.Open("./images.json")
+	images_json, err := os.Open("./stacks/images.json")
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(json.NewDecoder(images_json).Decode(&settings.ImagesJson)).To(Succeed())
@@ -121,6 +122,9 @@ func TestAcceptance(t *testing.T) {
 		settings.ImagesJson.StackImages = filteredStacks
 	}
 
+	DefaultStack = getDefaultStack(settings.ImagesJson.StackImages)
+	Expect(DefaultStack).NotTo(Equal(StackImages{}))
+
 	buildpackStore := occam.NewBuildpackStore()
 
 	settings.Extensions.UbiNodejsExtension.Online, err = buildpackStore.Get.
@@ -139,7 +143,11 @@ func TestAcceptance(t *testing.T) {
 		Execute(settings.Config.GoDist)
 	Expect(err).NotTo(HaveOccurred())
 
-	builder.buildImageUrl, builder.runImageUrl, builder.imageUrl, err = utils.GenerateBuilder(root, "build", RegistryUrl)
+	builder.buildImageUrl, builder.runImageUrl, builder.imageUrl, err = utils.GenerateBuilder(
+		root,
+		DefaultStack.OutputDir,
+		RegistryUrl,
+	)
 	Expect(err).NotTo(HaveOccurred())
 
 	SetDefaultEventuallyTimeout(120 * time.Second)
@@ -157,4 +165,13 @@ func TestAcceptance(t *testing.T) {
 	err = utils.RemoveImages(docker, []string{lifecycleImageID, builder.runImageUrl, builder.imageUrl})
 	Expect(err).NotTo(HaveOccurred())
 
+}
+
+func getDefaultStack(stackImages []StackImages) StackImages {
+	for _, stack := range stackImages {
+		if stack.Name == "default" {
+			return stack
+		}
+	}
+	return StackImages{}
 }

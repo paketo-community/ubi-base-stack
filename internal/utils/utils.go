@@ -13,16 +13,16 @@ import (
 	"github.com/paketo-buildpacks/packit/v2/pexec"
 )
 
-func GenerateBuilder(rootDir string, stackPath string, registryUrl string) (buildImageUrl string, runImageUrl string, builderImageUrl string, err error) {
+func GenerateBuilder(rootDir string, outputDir string, registryUrl string) (buildImageUrl string, runImageUrl string, builderImageUrl string, err error) {
 
-	buildArchive := filepath.Join(rootDir, "build", "build.oci")
+	buildArchive := filepath.Join(rootDir, outputDir, "build.oci")
 	buildImageID := fmt.Sprintf("build-image-%s", uuid.NewString())
 	buildImageUrl, err = PushFileToLocalRegistry(buildArchive, registryUrl, buildImageID)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	runArchive := filepath.Join(rootDir, stackPath, "run.oci")
+	runArchive := filepath.Join(rootDir, outputDir, "run.oci")
 	runImageID := fmt.Sprintf("run-image-%s", uuid.NewString())
 	runImageUrl, err = PushFileToLocalRegistry(runArchive, registryUrl, runImageID)
 	if err != nil {
