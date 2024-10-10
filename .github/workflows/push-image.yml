@@ -18,7 +18,7 @@ env:
 jobs:
   preparation:
     name: Preparation
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     outputs:
       DOCKERHUB_ORG: ${{ steps.get-dockerhub-namespace.outputs.DOCKERHUB_ORG }}
       push_to_gcr: ${{ steps.parse_configs.outputs.push_to_gcr }}
@@ -35,7 +35,7 @@ jobs:
       run: |
         set -euo pipefail
         shopt -s inherit_errexit
-        
+
         # If the workflow has been triggered from dispatch event
         if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
           echo "tag=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
@@ -50,7 +50,7 @@ jobs:
         # paketo-buildpacks/repo-name --> repo-name
         echo "repo_name=$(echo "${{ github.repository }}" | sed 's/^.*\///')" >> "$GITHUB_OUTPUT"
 
-    - name: Get stacks 
+    - name: Get stacks
       id: get-stacks
       run: |
         stacks=$(
@@ -113,7 +113,7 @@ jobs:
 
   push:
     name: Push
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     needs: preparation
     strategy:
       max-parallel: 4
@@ -179,13 +179,17 @@ jobs:
           --build-archive "${GITHUB_WORKSPACE}/${{ matrix.stack.build_image }}.oci"  \
           --run-archive "${GITHUB_WORKSPACE}/${{ matrix.stack.run_image }}.oci"
 
-        if [ "${{ needs.preparation.outputs.push_to_gcr }}" = "true" ]; then
-          for imageType in ${{ matrix.stack.build_image }} ${{ matrix.stack.run_image }}; do
+          if [ "${{ needs.preparation.outputs.push_to_gcr }}" = "true" ]; then
+
+          platforms=$(docker manifest inspect "docker.io/${DOCKERHUB_ORG}/${{ matrix.stack.run_image }}-${{ needs.preparation.outputs.repo_name }}:${{ needs.preparation.outputs.tag }}" |
+            jq -r '[.manifests[].platform] | [.[] | .os + "/" + .architecture] | join(",")')
+
+            for imageType in ${{ matrix.stack.build_image }} ${{ matrix.stack.run_image }}; do
             echo "FROM docker.io/${DOCKERHUB_ORG}/${imageType}-${{ needs.preparation.outputs.repo_name }}:${{ needs.preparation.outputs.tag }}" | \
             docker buildx build -f - . \
               --tag "gcr.io/${GCR_PROJECT}/${imageType}-${{ needs.preparation.outputs.repo_name }}:${{ needs.preparation.outputs.tag }}" \
               --tag "gcr.io/${GCR_PROJECT}/${imageType}-${{ needs.preparation.outputs.repo_name }}:latest" \
-              --platform linux/amd64,linux/arm64 \
+              --platform "$platforms" \
               --provenance=false \
               --push
           done
