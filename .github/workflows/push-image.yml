@@ -13,6 +13,8 @@ on:
 
 env:
   REGISTRIES_FILEPATH: "registries.json"
+  GCR_REGISTRY: "gcr.io"
+  GCR_USERNAME: "_json_key"
 
 jobs:
   preparation:
@@ -110,7 +112,7 @@ jobs:
       uses: paketo-buildpacks/github-config/actions/release/download-asset@main
       with:
         url: "${{ matrix.oci_image.url }}"
-        output: "${{ github.workspace }}/${{ matrix.oci_image.name }}.oci"
+        output: "./${{ matrix.oci_image.name }}.oci"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
     - name: Docker login docker.io
@@ -125,11 +127,11 @@ jobs:
       uses: docker/login-action@v3
       if: ${{ needs.preparation.outputs.push_to_gcr == 'true' }}
       with:
-        username: _json_key
+        username: ${{ env.GCR_USERNAME }}
         password: ${{ secrets.GCR_PUSH_BOT_JSON_KEY }}
-        registry: gcr.io
+        registry: ${{ env.GCR_REGISTRY }}
 
-    - name: Push ${{ matrix.oci_image }} Image to registries
+    - name: Push ${{ matrix.oci_image.name }} Image to registries
       id: push
       env:
         DOCKERHUB_ORG: "${{ needs.preparation.outputs.DOCKERHUB_ORG }}"
@@ -140,32 +142,20 @@ jobs:
         mkdir -p ./.bin/
         chmod 777 ./.bin/
 
-        ##TODO remove below code
-        echo "---------------------------"
-        echo "${{ matrix.oci_image.url }}"
-        echo "${{ matrix.oci_image.name }}"
-        echo "${{ github.workspace }}"
-        echo "${{ needs.preparation.outputs.tag }}"
-        echo "${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}"
-        echo "oci-archive:${{ github.workspace }}/${{ matrix.oci_image.name }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:${{ needs.preparation.outputs.tag }}"
-        echo "oci-archive:${{ github.workspace }}/${{ matrix.oci_image.name }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:latest"
-        echo "${DOCKERHUB_ORG}"
-        echo "---------------------------"
-
         ./scripts/publish.sh \
           --image-ref "docker.io/${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:${{ needs.preparation.outputs.tag }}" \
           --image-ref "docker.io/${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:latest" \
-          --image-archive "${GITHUB_WORKSPACE}/${{ matrix.oci_image.name }}.oci"  \
+          --image-archive "./${{ matrix.oci_image.name }}.oci"
 
-          if [ "${{ needs.preparation.outputs.push_to_gcr }}" = "true" ]; then
+        if [ "${{ needs.preparation.outputs.push_to_gcr }}" = "true" ]; then
 
-            platforms=$(docker manifest inspect "docker.io/${DOCKERHUB_ORG}/${{ matrix.stack.run_image }}-${{ needs.preparation.outputs.repo_name }}:${{ needs.preparation.outputs.tag }}" |
-              jq -r '[.manifests[].platform] | [.[] | .os + "/" + .architecture] | join(",")')
+          platforms=$(docker manifest inspect "docker.io/${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:${{ needs.preparation.outputs.tag }}" |
+            jq -r '[.manifests[].platform] | [.[] | .os + "/" + .architecture] | join(",")')
 
           echo "FROM docker.io/${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:${{ needs.preparation.outputs.tag }}" | \
           docker buildx build -f - . \
-            --tag "gcr.io/${GCR_PROJECT}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:${{ needs.preparation.outputs.tag }}" \
-            --tag "gcr.io/${GCR_PROJECT}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:latest" \
+            --tag "${{ env.GCR_REGISTRY }}/${GCR_PROJECT}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:${{ needs.preparation.outputs.tag }}" \
+            --tag "${{ env.GCR_REGISTRY }}/${GCR_PROJECT}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:latest" \
               --platform "$platforms" \
             --provenance=false \
             --push
@@ -182,10 +172,10 @@ jobs:
           # bionic-tiny --> tiny
           variant="${registry_repo#bionic-}"
 
-          sudo skopeo copy "oci-archive:${{ github.workspace }}/${{ matrix.oci_image.name }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}:${{ steps.event.outputs.tag }}-${variant}"
-          sudo skopeo copy "oci-archive:${{ github.workspace }}/${{ matrix.oci_image.name }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}:${{ steps.event.outputs.tag }}-${variant}-cnb"
-          sudo skopeo copy "oci-archive:${{ github.workspace }}/${{ matrix.oci_image.name }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}:${variant}-cnb"
-          sudo skopeo copy "oci-archive:${{ github.workspace }}/${{ matrix.oci_image.name }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}:${variant}"
+          sudo skopeo copy "oci-archive:./${{ matrix.oci_image.name }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}:${{ steps.event.outputs.tag }}-${variant}"
+          sudo skopeo copy "oci-archive:./${{ matrix.oci_image.name }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}:${{ steps.event.outputs.tag }}-${variant}-cnb"
+          sudo skopeo copy "oci-archive:./${{ matrix.oci_image.name }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}:${variant}-cnb"
+          sudo skopeo copy "oci-archive:./${{ matrix.oci_image.name }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}:${variant}"
 
           sudo skopeo copy "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}:${variant}-cnb" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image.name }}:${variant}-cnb"
         fi
