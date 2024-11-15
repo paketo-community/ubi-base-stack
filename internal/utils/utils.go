@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/google/uuid"
@@ -13,18 +14,18 @@ import (
 	"github.com/paketo-buildpacks/packit/v2/pexec"
 )
 
-func GenerateBuilder(rootDir string, outputDir string, registryUrl string) (buildImageUrl string, runImageUrl string, builderImageUrl string, err error) {
+func GenerateBuilder(jamPath string, rootDir string, outputDir string, registryUrl string) (buildImageUrl string, runImageUrl string, builderImageUrl string, err error) {
 
 	buildArchive := filepath.Join(rootDir, outputDir, "build.oci")
 	buildImageID := fmt.Sprintf("build-image-%s", uuid.NewString())
-	buildImageUrl, err = PushFileToLocalRegistry(buildArchive, registryUrl, buildImageID)
+	buildImageUrl, err = PushFileToLocalRegistry(jamPath, buildArchive, registryUrl, buildImageID)
 	if err != nil {
 		return "", "", "", err
 	}
 
 	runArchive := filepath.Join(rootDir, outputDir, "run.oci")
 	runImageID := fmt.Sprintf("run-image-%s", uuid.NewString())
-	runImageUrl, err = PushFileToLocalRegistry(runArchive, registryUrl, runImageID)
+	runImageUrl, err = PushFileToLocalRegistry(jamPath, runArchive, registryUrl, runImageID)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -78,23 +79,13 @@ func GenerateBuilder(rootDir string, outputDir string, registryUrl string) (buil
 	return buildImageUrl, runImageUrl, builderImageUrl, nil
 }
 
-func PushFileToLocalRegistry(filePath string, registryUrl string, imageName string) (string, error) {
+func PushFileToLocalRegistry(jamPath string, filePath string, registryUrl string, imageName string) (string, error) {
 	buf := bytes.NewBuffer(nil)
 
 	imageURL := fmt.Sprintf("%s/%s", registryUrl, imageName)
 
-	skopeo := pexec.NewExecutable("skopeo")
-
-	err := skopeo.Execute(pexec.Execution{
-		Stdout: buf,
-		Stderr: buf,
-		Args: []string{
-			"copy",
-			fmt.Sprintf("oci-archive:%s", filePath),
-			fmt.Sprintf("docker://%s:latest", imageURL),
-			"--dest-tls-verify=false",
-		},
-	})
+	cmd := exec.Command(jamPath, "publish-image", "--image-ref", imageURL, "--image-archive", filePath)
+	err := cmd.Run()
 
 	if err != nil {
 		return buf.String(), err

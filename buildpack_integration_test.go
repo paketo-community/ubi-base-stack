@@ -67,7 +67,7 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 			}
 
 			it("should successfully build a go app", func() {
-				_, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(root, stack.OutputDir, RegistryUrl)
+				_, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(JamPath, root, stack.OutputDir, RegistryUrl)
 				Expect(err).NotTo(HaveOccurred())
 
 				image, _, err = pack.WithNoColor().Build.
@@ -130,7 +130,7 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 			}
 
 			it(fmt.Sprintf("it should successfully get the %s version of the run image", stack.Name), func() {
-				_, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(root, stack.OutputDir, RegistryUrl)
+				_, runImageUrl, builderImageUrl, err = utils.GenerateBuilder(JamPath, root, stack.OutputDir, RegistryUrl)
 				Expect(err).NotTo(HaveOccurred())
 
 				image, _, err = pack.WithNoColor().Build.

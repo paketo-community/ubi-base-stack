@@ -18,6 +18,7 @@ import (
 
 var root string
 var RegistryUrl string
+var JamPath string
 var DefaultStack StackImages
 
 type StackImages struct {
@@ -88,6 +89,9 @@ func TestAcceptance(t *testing.T) {
 	RegistryUrl = os.Getenv("REGISTRY_URL")
 	Expect(RegistryUrl).NotTo(Equal(""))
 
+	JamPath = os.Getenv("JAM_PATH")
+	Expect(JamPath).NotTo(Equal(""))
+
 	root, err = filepath.Abs(".")
 	Expect(err).ToNot(HaveOccurred())
 
@@ -144,6 +148,7 @@ func TestAcceptance(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	builder.buildImageUrl, builder.runImageUrl, builder.imageUrl, err = utils.GenerateBuilder(
+		JamPath,
 		root,
 		DefaultStack.OutputDir,
 		RegistryUrl,

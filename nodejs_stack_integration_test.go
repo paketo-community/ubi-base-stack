@@ -71,7 +71,7 @@ func testNodejsStackIntegration(t *testing.T, context spec.G, it spec.S) {
 
 			it(fmt.Sprintf("it successfully builds an app using %s run image", stack.Name), func() {
 				runArchive := filepath.Join(root, stack.OutputDir, "run.oci")
-				bpUbiRunImageOverrideImageID, err = utils.PushFileToLocalRegistry(runArchive, RegistryUrl, fmt.Sprintf("run-%s-%s", stack.Name, uuid.NewString()))
+				bpUbiRunImageOverrideImageID, err = utils.PushFileToLocalRegistry(JamPath, runArchive, RegistryUrl, fmt.Sprintf("run-%s-%s", stack.Name, uuid.NewString()))
 				Expect(err).NotTo(HaveOccurred())
 
 				image, _, err = pack.Build.

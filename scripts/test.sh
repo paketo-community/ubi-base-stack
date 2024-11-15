@@ -135,6 +135,7 @@ function main() {
     registryPid=$(local::registry::start $registryPort)
     localRegistry="127.0.0.1:$registryPort"
     export REGISTRY_URL="${localRegistry}"
+    util::print::info "Local registry is running with url: ${localRegistry}"
   fi
 
   tests::run
@@ -209,6 +210,7 @@ function tests::run() {
   util::print::title "Run Stack Acceptance Tests"
 
   export CGO_ENABLED=0
+  export JAM_PATH="${STACK_DIR}/.bin/jam"
   testout=$(mktemp)
   pushd "${STACK_DIR}" > /dev/null
     if GOMAXPROCS="${GOMAXPROCS:-4}" go test -count=1 -timeout 0 ./... -v -run Acceptance | tee "${testout}"; then
