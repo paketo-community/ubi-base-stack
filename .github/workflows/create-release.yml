@@ -1334,7 +1334,7 @@ jobs:
           done
         fi
 
-        echo "release_body="release_notes.md
+        echo "release_body=release_notes.md" >> "$GITHUB_OUTPUT"
 
     - name: Create Release
       uses: paketo-buildpacks/github-config/actions/release/create@main

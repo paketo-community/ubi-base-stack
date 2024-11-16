@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/google/uuid"
 
@@ -14,18 +13,16 @@ import (
 	"github.com/paketo-buildpacks/packit/v2/pexec"
 )
 
-func GenerateBuilder(jamPath string, rootDir string, outputDir string, registryUrl string) (buildImageUrl string, runImageUrl string, builderImageUrl string, err error) {
+func GenerateBuilder(jamPath string, buildImage string, runImage string, registryUrl string) (buildImageUrl string, runImageUrl string, builderImageUrl string, err error) {
 
-	buildArchive := filepath.Join(rootDir, outputDir, "build.oci")
 	buildImageID := fmt.Sprintf("build-image-%s", uuid.NewString())
-	buildImageUrl, err = PushFileToLocalRegistry(jamPath, buildArchive, registryUrl, buildImageID)
+	buildImageUrl, err = PushFileToLocalRegistry(jamPath, buildImage, registryUrl, buildImageID)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	runArchive := filepath.Join(rootDir, outputDir, "run.oci")
 	runImageID := fmt.Sprintf("run-image-%s", uuid.NewString())
-	runImageUrl, err = PushFileToLocalRegistry(jamPath, runArchive, registryUrl, runImageID)
+	runImageUrl, err = PushFileToLocalRegistry(jamPath, runImage, registryUrl, runImageID)
 	if err != nil {
 		return "", "", "", err
 	}
