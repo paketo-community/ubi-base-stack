@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 
 	"github.com/google/uuid"
 
@@ -13,16 +12,16 @@ import (
 	"github.com/paketo-buildpacks/packit/v2/pexec"
 )
 
-func GenerateBuilder(jamPath string, buildImage string, runImage string, registryUrl string) (buildImageUrl string, runImageUrl string, builderImageUrl string, err error) {
+func GenerateBuilder(buildImage string, runImage string, registryUrl string) (buildImageUrl string, runImageUrl string, builderImageUrl string, err error) {
 
 	buildImageID := fmt.Sprintf("build-image-%s", uuid.NewString())
-	buildImageUrl, err = PushFileToLocalRegistry(jamPath, buildImage, registryUrl, buildImageID)
+	buildImageUrl, err = PushFileToLocalRegistry(buildImage, registryUrl, buildImageID)
 	if err != nil {
 		return "", "", "", err
 	}
 
 	runImageID := fmt.Sprintf("run-image-%s", uuid.NewString())
-	runImageUrl, err = PushFileToLocalRegistry(jamPath, runImage, registryUrl, runImageID)
+	runImageUrl, err = PushFileToLocalRegistry(runImage, registryUrl, runImageID)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -76,13 +75,21 @@ func GenerateBuilder(jamPath string, buildImage string, runImage string, registr
 	return buildImageUrl, runImageUrl, builderImageUrl, nil
 }
 
-func PushFileToLocalRegistry(jamPath string, filePath string, registryUrl string, imageName string) (string, error) {
+func PushFileToLocalRegistry(filePath string, registryUrl string, imageName string) (string, error) {
 	buf := bytes.NewBuffer(nil)
-
 	imageURL := fmt.Sprintf("%s/%s", registryUrl, imageName)
 
-	cmd := exec.Command(jamPath, "publish-image", "--image-ref", imageURL, "--image-archive", filePath)
-	err := cmd.Run()
+	jam := pexec.NewExecutable("jam")
+	err := jam.Execute(pexec.Execution{
+		Stdout: buf,
+		Stderr: buf,
+		Args: []string{
+			"publish-image",
+			"--image-ref",
+			imageURL,
+			"--image-archive", filePath,
+		},
+	})
 
 	if err != nil {
 		return buf.String(), err
