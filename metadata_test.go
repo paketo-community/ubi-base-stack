@@ -51,7 +51,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				index, manifests, err := getImageIndexAndManifests(tmpDir, filepath.Join(root, imageInfo.OutputDir, "build.oci"))
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(manifests).To(HaveLen(1))
+				Expect(manifests).To(HaveLen(4))
 				Expect(manifests[0].Platform).To(Equal(&v1.Platform{
 					OS:           "linux",
 					Architecture: "amd64",
@@ -99,7 +99,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				index, manifests, err := getImageIndexAndManifests(tmpDir, filepath.Join(root, imageInfo.OutputDir, "run.oci"))
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(manifests).To(HaveLen(1))
+				Expect(manifests).To(HaveLen(4))
 				Expect(manifests[0].Platform).To(Equal(&v1.Platform{
 					OS:           "linux",
 					Architecture: "amd64",

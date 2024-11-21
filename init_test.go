@@ -144,8 +144,8 @@ func TestAcceptance(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	builder.buildImageUrl, builder.runImageUrl, builder.imageUrl, err = utils.GenerateBuilder(
-		root,
-		DefaultStack.OutputDir,
+		filepath.Join(root, DefaultStack.OutputDir, "build.oci"),
+		filepath.Join(root, DefaultStack.OutputDir, "run.oci"),
 		RegistryUrl,
 	)
 	Expect(err).NotTo(HaveOccurred())

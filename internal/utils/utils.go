@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/google/uuid"
 
@@ -13,18 +12,16 @@ import (
 	"github.com/paketo-buildpacks/packit/v2/pexec"
 )
 
-func GenerateBuilder(rootDir string, outputDir string, registryUrl string) (buildImageUrl string, runImageUrl string, builderImageUrl string, err error) {
+func GenerateBuilder(buildImage string, runImage string, registryUrl string) (buildImageUrl string, runImageUrl string, builderImageUrl string, err error) {
 
-	buildArchive := filepath.Join(rootDir, outputDir, "build.oci")
 	buildImageID := fmt.Sprintf("build-image-%s", uuid.NewString())
-	buildImageUrl, err = PushFileToLocalRegistry(buildArchive, registryUrl, buildImageID)
+	buildImageUrl, err = PushFileToLocalRegistry(buildImage, registryUrl, buildImageID)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	runArchive := filepath.Join(rootDir, outputDir, "run.oci")
 	runImageID := fmt.Sprintf("run-image-%s", uuid.NewString())
-	runImageUrl, err = PushFileToLocalRegistry(runArchive, registryUrl, runImageID)
+	runImageUrl, err = PushFileToLocalRegistry(runImage, registryUrl, runImageID)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -80,19 +77,17 @@ func GenerateBuilder(rootDir string, outputDir string, registryUrl string) (buil
 
 func PushFileToLocalRegistry(filePath string, registryUrl string, imageName string) (string, error) {
 	buf := bytes.NewBuffer(nil)
-
 	imageURL := fmt.Sprintf("%s/%s", registryUrl, imageName)
 
-	skopeo := pexec.NewExecutable("skopeo")
-
-	err := skopeo.Execute(pexec.Execution{
+	jam := pexec.NewExecutable("jam")
+	err := jam.Execute(pexec.Execution{
 		Stdout: buf,
 		Stderr: buf,
 		Args: []string{
-			"copy",
-			fmt.Sprintf("oci-archive:%s", filePath),
-			fmt.Sprintf("docker://%s:latest", imageURL),
-			"--dest-tls-verify=false",
+			"publish-image",
+			"--image-ref",
+			imageURL,
+			"--image-archive", filePath,
 		},
 	})
 

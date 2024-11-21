@@ -2,10 +2,10 @@ name: Create Release
 
 on:
   schedule:
-    - cron: "*/30 * * * *" # every 30 minutes
+  - cron: '*/30 * * * *'  # every 30 minutes
   push:
     branches:
-      - main
+    - main
   workflow_dispatch:
     inputs:
       version:
@@ -22,55 +22,120 @@ on:
 
 concurrency: release
 env:
-  STACKS_FILENAME: "stacks/images.json"
-
+  STACKS_FILEPATH: "stacks/images.json"
+  PATCHED_USNS_FILENAME: "patched-usns.json"
 jobs:
   preparation:
     name: Preparation
     runs-on: ubuntu-22.04
     outputs:
-      stacks: ${{ steps.get-stack-names.outputs.stacks }}
-      support_usns: ${{ steps.get-stack-names.outputs.support_usns }}
+      stacks_added: ${{ steps.get-stacks.outputs.stacks_added }}
+      stacks: ${{ steps.get-stacks.outputs.stacks }}
+      support_usns: ${{ steps.polling-os-type.outputs.support_usns }}
+      architectures: ${{ steps.lookup.outputs.platforms }}
+      archs_added: ${{ steps.lookup.outputs.platforms_added }}
+      polling_type: ${{ steps.polling-os-type.outputs.polling_type }}
       github_repo_name: ${{ steps.repo.outputs.github_repo_name }}
       registry_repo_name: ${{ steps.repo.outputs.registry_repo_name }}
       repo_owner: ${{ steps.repo.outputs.repo_owner }}
+      default_stack_dir: ${{ steps.lookup.outputs.default_stack_dir }}
+      stack_files_dir: ${{ steps.get-stacks.outputs.stack_files_dir }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # gets full history
 
-      - name: Get stack names and USN support
-        id: get-stack-names
+      - name: Get stacks images
+        id: get-stacks
         run: |
-          stacks=$(
+
+          if [[ -f ${{ env.STACKS_FILEPATH }} ]]; then
+            current_stacks=$(jq '[.images[] |
+            . +
+            {
+              "create_build_image": (.create_build_image // false),
+              "is_new": true
+            }]' ${{ env.STACKS_FILEPATH }} )
+
+            stack_files_dir="$(dirname "${{ env.STACKS_FILEPATH }}")"
+
+            git show $(git describe --tags --abbrev=0):"${{ env.STACKS_FILEPATH }}" > ./previous_images.json
+
+            if [ -f "./previous_images.json" ]; then
+              previous_stacks=$(jq '[.images[] |
+              . +
+              {
+                "create_build_image": (.create_build_image // false),
+                "is_new": false
+              }]' "./previous_images.json" )
+            else
+              previous_stacks="[]"
+            fi
+
+            stacks=$(echo "$current_stacks" | jq -c --argjson prev "$previous_stacks" '
+                map(
+                    . as $curr |
+                    ($prev[] | select(.name == $curr.name)) // $curr
+                )
+            ')
+          else
+            stacks=$(
             cat <<EOF
           [
             {
-              "name": "stack",
+              "name": "default",
               "config_dir": "stack",
               "output_dir": "build",
               "build_image": "build",
+              "build_receipt_filename": "build-receipt.cyclonedx.json",
               "run_image": "run",
-              "create_build_image": true
+              "run_receipt_filename": "run-receipt.cyclonedx.json",
+              "create_build_image": true,
+              "is_new": false
             }
           ]
           EOF
           )
-
-          support_usns=true
-
-          if [[ -f ${{ env.STACKS_FILENAME }} ]]; then
-            stacks=$(jq '[.images[] |
-            . +
-            {
-              "create_build_image": (.create_build_image // false)
-            }]' ${{ env.STACKS_FILENAME }} )
-
-            support_usns=$( jq '.support_usns' ${{ env.STACKS_FILENAME }} )
+            stack_files_dir="stack"
           fi
+
+          echo "stack_files_dir=$stack_files_dir" >> "$GITHUB_OUTPUT"
+
+          ## Filter stacks array to include the minimum number of attributes
+          stacks=$(echo "$stacks" | jq 'map({
+              name,
+              config_dir,
+              output_dir,
+              build_image,
+              build_receipt_filename,
+              run_image,
+              run_receipt_filename,
+              create_build_image,
+              base_build_container_image,
+              base_run_container_image,
+              is_new
+            })')
 
           stacks=$(jq -c <<< "$stacks" )
           printf "stacks=%s\n" "${stacks}" >> "$GITHUB_OUTPUT"
-          printf "support_usns=%s\n" "${support_usns}" >> "$GITHUB_OUTPUT"
+
+      - name: Polling OS type
+        id: polling-os-type
+        run: |
+          support_usns=true
+
+          if [[ -f ${{ env.STACKS_FILEPATH }} ]]; then
+            support_usns=$( jq '.support_usns' ${{ env.STACKS_FILEPATH }} )
+          fi
+
+          if [ $support_usns == true ]; then
+            echo "polling_type=usn" >> "$GITHUB_OUTPUT"
+          else
+            echo "polling_type=hash" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "support_usns=${support_usns}" >> "$GITHUB_OUTPUT"
 
       - name: Get Repository Name
         id: repo
@@ -90,81 +155,308 @@ jobs:
           repo_owner="${GITHUB_REPOSITORY_OWNER/-/}"
           printf "repo_owner=%s\n" "${repo_owner}" >> "$GITHUB_OUTPUT"
 
-  poll_images:
-    name: Poll Images
+      - name: Lookup Supported Architectures
+        id: lookup
+        run: |
+          #! /usr/bin/env bash
+
+          set -euo pipefail
+          shopt -s inherit_errexit
+
+          # install yj to parse TOML
+          curl -L $(curl -sL https://api.github.com/repos/sclevine/yj/releases/latest |  jq -r '.assets[] | select(.name=="yj-linux-amd64").browser_download_url') -o yj
+          chmod +x yj
+
+          default_stack_dir=$(echo '${{ steps.get-stacks.outputs.stacks }}' | jq -r '.[] | select(.name=="default") | .config_dir')
+          echo "default_stack_dir=${default_stack_dir}" >> "$GITHUB_OUTPUT"
+
+          current_platforms="$(cat "$default_stack_dir/stack.toml" | ./yj -tj | jq -c '[.platforms[] | { name: sub("linux/"; "") , is_new: true }]')"
+
+          # get previous platforms
+          git show $(git describe --tags --abbrev=0):"$default_stack_dir/stack.toml" > ./previous_stack.toml
+
+          previous_platforms="$(cat ./previous_stack.toml | ./yj -tj | jq -c '[.platforms[] | { name: sub("linux/"; "") , is_new: false }]')"
+
+          platforms=$(echo "$current_platforms" | jq -c --argjson prev "$previous_platforms" '
+              map(
+                  . as $curr |
+                  ($prev[] | select(.name == $curr.name)) // $curr
+              )
+          ')
+
+          echo "platforms=${platforms}" >> "$GITHUB_OUTPUT"
+
+  # The following job is specific to Ubuntu images. It checks for new
+  # USNs (Ubuntu Security Notices) and triggers the flow to create
+  # a new release with the latest images that have the USNs patched.
+  poll_usns:
+    name: Poll USNs
     runs-on: ubuntu-22.04
+    needs: [preparation]
+    if: ${{ needs.preparation.outputs.polling_type == 'usn' }}
+    strategy:
+      matrix:
+        stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
+        arch: ${{ fromJSON(needs.preparation.outputs.architectures) }}
+    outputs:
+      usns: ${{ steps.new_usns.outputs.usns }}
+    steps:
+    - name: Generate receipt asset patterns
+      id: receipt_pattern
+      run: |
+        if [ "${{ matrix.arch.name }}" = "amd64" ]; then
+          if [ ${{ matrix.stacks.create_build_image }} == true ]; then
+            echo "build=${{ needs.preparation.outputs.github_repo_name }}-\\d+\\.\\d+(\\.\\d+)?-${{ matrix.stacks.build_receipt_filename }}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "run=${{ needs.preparation.outputs.github_repo_name }}-\\d+\\.\\d+(\\.\\d+)?-${{ matrix.stacks.run_receipt_filename }}" >> "$GITHUB_OUTPUT"
+        else
+          if [ ${{ matrix.stacks.create_build_image }} == true ]; then
+            echo "build=${{ matrix.arch.name }}-${{ matrix.stacks.build_receipt_filename }}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "run=${{ matrix.arch.name }}-${{ matrix.stacks.run_receipt_filename }}" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Write Empty Previous Receipts
+      if: ${{ matrix.arch.is_new == true || matrix.stacks.is_new == true }}
+      run: |
+        if [ ${{ matrix.stacks.create_build_image }} == true ]; then
+          if [ ! -f "./${{ matrix.arch.name }}-previous-build-receipt-${{ matrix.stacks.name }}" ]; then
+            echo '{"components":[]}' > "./${{ matrix.arch.name }}-previous-build-receipt-${{ matrix.stacks.name }}"
+          fi
+        fi
+        if [ ! -f "./${{ matrix.arch.name }}-previous-run-receipt-${{ matrix.stacks.name }}" ]; then
+          echo '{"components":[]}' > "./${{ matrix.arch.name }}-previous-run-receipt-${{ matrix.stacks.name }}"
+        fi
+
+    - name: Check for Previous Releases
+      id: check_previous
+      run: |
+        gh auth status
+        # shellcheck disable=SC2046
+        if [ $(gh api "/repos/${{ github.repository }}/releases" | jq -r 'length') -eq 0 ]; then
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        echo "exists=true" >> "$GITHUB_OUTPUT"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Find and Download Previous Build Receipt
+      if: ${{ matrix.arch.is_new == false && matrix.stacks.is_new == false && steps.check_previous.outputs.exists == 'true' }}
+      id: previous_build
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+      with:
+        asset_pattern: "${{ steps.receipt_pattern.outputs.build }}"
+        search_depth: 1
+        repo: ${{ github.repository }}
+        output_path: "/github/workspace/${{ matrix.arch.name }}-previous-build-receipt-${{ matrix.stacks.name }}"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+        strict: true
+
+    - name: Find and Download Previous Run Receipt
+      if: ${{ matrix.arch.is_new == false && matrix.stacks.is_new == false && steps.check_previous.outputs.exists == 'true' }}
+      id: previous_run
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+      with:
+        asset_pattern: "${{ steps.receipt_pattern.outputs.run }}"
+        search_depth: 1
+        repo: ${{ github.repository }}
+        output_path: "/github/workspace/${{ matrix.arch.name }}-previous-run-receipt-${{ matrix.stacks.name }}"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+        strict: true
+
+    - name: Get Package List
+      id: packages
+      if: ${{ steps.previous_build.outputs.output_path != '' && steps.previous_run.outputs.output_path != '' }}
+      uses: paketo-buildpacks/github-config/actions/stack/generate-package-list@main
+      with:
+        build_receipt: "${{ github.workspace }}/${{ matrix.arch.name }}-previous-build-receipt-${{ matrix.stacks.name }}"
+        run_receipt: "${{ github.workspace }}/${{ matrix.arch.name }}-previous-run-receipt-${{ matrix.stacks.name }}"
+
+    - name: Generate USNs download asset pattern
+      id: usn_download_pattern
+      run: |
+        arch_prefix=""
+        if [ "${{ matrix.arch.name }}" = "amd64" ]; then
+          arch_prefix=""
+        else
+          arch_prefix="${{ matrix.arch.name }}"
+        fi
+
+        stack_name_prefix=""
+        if [ "${{ matrix.stacks.name }}" = "default" ]; then
+          stack_name_prefix=""
+        else
+          stack_name_prefix="${{ matrix.stacks.name }}"
+        fi
+
+        pattern=$(echo '["\\d+.\\d+(.\\d+)?","'"$stack_name_prefix"'", "'"$arch_prefix"'", "${{ env.PATCHED_USNS_FILENAME }}"]' |  jq -r 'map(select(length > 0)) | join("-")')
+
+        echo "pattern=$pattern" >> "$GITHUB_OUTPUT"
+
+    - name: Find and Download Previous Patched USNs
+      id: download_patched
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+      with:
+        asset_pattern: "${{ steps.usn_download_pattern.outputs.pattern }}"
+        search_depth: "-1"   # Search all releases
+        repo: ${{ github.repository }}
+        output_path: "/github/workspace/${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}-previous"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+    - name: Output Patched USNs as JSON String
+      id: patched
+      if: ${{ steps.download_patched.outputs.output_path != '' }}
+      run: |
+        patched=$(jq --compact-output . < "${GITHUB_WORKSPACE}/${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}-previous")
+        printf "patched=%s\n" "${patched}" >> "$GITHUB_OUTPUT"
+
+    - name: Get Stack Distribution Name
+      id: distro
+      run: |
+        # Extract distro from repo name:
+        # paketo-buildpacks/jammy-tiny-stack --> jammy
+        distro="$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-.*$//')"
+        echo "Ubuntu distribution: ${distro}"
+        printf "distro=%s\n" "${distro}" >> "$GITHUB_OUTPUT"
+
+    - name: Get New USNs
+      id: usns
+      uses: paketo-buildpacks/github-config/actions/stack/get-usns@main
+      with:
+        distribution: ${{ steps.distro.outputs.distro }}
+        packages: ${{ steps.packages.outputs.packages }}
+        last_usns: ${{ steps.patched.outputs.patched }}
+
+    - name: Write USNs File
+      id: write_usns
+      run: |
+        jq . <<< "${USNS}" > "./${USNS_PATH}"
+        echo "usns=./${USNS_PATH}" >> "$GITHUB_OUTPUT"
+      env:
+        USNS_PATH: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}"
+        USNS: ${{ steps.usns.outputs.usns }}
+
+    - name: Upload USNs file
+      uses: actions/upload-artifact@v4
+      with:
+        name: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}"
+        path: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}"
+
+    - name: Are any new USNs
+      id: new_usns
+      run: |
+        new_usns_length=$(cat "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}" | jq 'length')
+
+        if [ "$new_usns_length" -ge 0 ]; then
+          echo "usns=true" >> "$GITHUB_OUTPUT"
+        fi
+
+  # The job below checks if new images are available on the registry
+  # based on the sha256 checksum. If yes, it triggers the flow
+  # to create a new release with the latest images
+  poll_images:
+    name: Poll Images based on the hash code
+    runs-on: ubuntu-22.04
+    if: ${{ needs.preparation.outputs.polling_type == 'hash' }}
     needs: preparation
     strategy:
       matrix:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
+        arch: ${{ fromJSON(needs.preparation.outputs.architectures) }}
     outputs:
       images_need_update: ${{ steps.compare_previous_and_current_sha256_hash_codes.outputs.images_need_update }}
     steps:
+    - name: Generate hash code asset patterns
+      id: hashcode_pattern
+      run: |
+        if [ "${{ matrix.arch.name }}" = "amd64" ]; then
+          echo "build=${{ needs.preparation.outputs.github_repo_name }}-\\d+.\\d+(.\\d+)?-${{ matrix.stacks.build_image }}.oci.sha256" >> "$GITHUB_OUTPUT"
+          echo "run=${{ needs.preparation.outputs.github_repo_name }}-\\d+.\\d+(.\\d+)?-${{ matrix.stacks.run_image }}.oci.sha256" >> "$GITHUB_OUTPUT"
+        else
+          echo "build=-${{ matrix.arch.name }}-${{ matrix.stacks.build_image }}.oci.sha256" >> "$GITHUB_OUTPUT"
+          echo "run=-${{ matrix.arch.name }}-${{ matrix.stacks.run_image }}.oci.sha256" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Find and Download Previous build image hash code of stack ${{ matrix.stacks.build_image }}
       if: ${{ matrix.stacks.create_build_image == true }}
       uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
       with:
-        asset_pattern: "${{ matrix.stacks.build_image }}.oci.sha256"
+        asset_pattern: "${{ steps.hashcode_pattern.outputs.build }}"
         search_depth: 1
         repo: ${{ github.repository }}
-        output_path: "/github/workspace/previous_${{ matrix.stacks.build_image }}.oci.sha256"
+        output_path: "./previous_${{ matrix.arch.name }}-${{ matrix.stacks.build_image }}.oci.sha256"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
     - name: Find and Download Previous run image hash code of stack ${{ matrix.stacks.run_image }}
       uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
       with:
-        asset_pattern: "${{ matrix.stacks.run_image }}.oci.sha256"
+        asset_pattern: "${{ steps.hashcode_pattern.outputs.run }}"
         search_depth: 1
         repo: ${{ github.repository }}
-        output_path: "/github/workspace/previous_${{ matrix.stacks.run_image }}.oci.sha256"
+        output_path: "./previous_${{ matrix.arch.name }}-${{ matrix.stacks.run_image }}.oci.sha256"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
-    - name: Get current run image hash code of ${{ matrix.stacks.name }} stack
-      run: |
-        skopeo inspect --format "{{.Digest}}" ${{ matrix.stacks.base_run_container_image }} > hash-code-current-run-image-${{ matrix.stacks.name }}
-
-    - name: Get current build image hash code of ${{ matrix.stacks.name }} stack
+    - name: Get current build image hash code of ${{ matrix.stacks.name }} stack with arch ${{ matrix.arch.name }}
       if: ${{ matrix.stacks.create_build_image == true }}
       run: |
-        skopeo inspect --format "{{.Digest}}" ${{ matrix.stacks.base_build_container_image }} > hash-code-current-build-image-${{ matrix.stacks.name }}
+        skopeo inspect --format "{{.Digest}}" ${{ matrix.stacks.base_build_container_image }} > ./hash-code-current-build-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
+
+    - name: Get current run image hash code of ${{ matrix.stacks.name }} stack with arch ${{ matrix.arch.name }}
+      run: |
+        skopeo inspect --format "{{.Digest}}" ${{ matrix.stacks.base_run_container_image }} > ./hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
+    
+    - name: Create empty image hash codes
+      run: |
+        if [ ! -f "./hash-code-current-build-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}" ]; then
+          touch "./hash-code-current-build-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}"
+        fi
+        if [ ! -f "./hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}" ]; then
+          touch "./hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}"
+        fi
 
     - name: Upload run image hash code
       uses: actions/upload-artifact@v4
       with:
-        name: hash-code-current-run-image-${{ matrix.stacks.name }}
-        path: hash-code-current-run-image-${{ matrix.stacks.name }}
+        name: hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
+        path: hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
         if-no-files-found: error 
 
     - name: Upload build image hash code
       if: ${{ matrix.stacks.create_build_image == true }}
       uses: actions/upload-artifact@v4
       with:
-        name: hash-code-current-build-image-${{ matrix.stacks.name }}
-        path: hash-code-current-build-image-${{ matrix.stacks.name }}
+        name: hash-code-current-build-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
+        path: hash-code-current-build-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
         if-no-files-found: error
 
     - name: Compare previous and current hash codes
       id: compare_previous_and_current_sha256_hash_codes
       run: |
-        if [ "$(cat previous_${{ matrix.stacks.run_image }}.oci.sha256)" != "$(cat hash-code-current-run-image-${{ matrix.stacks.name }})" ]; then
+        if [ "$(cat previous_${{ matrix.arch.name }}-${{ matrix.stacks.run_image }}.oci.sha256)" != "$(cat hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }})" ]; then
           echo "images_need_update=true" >> "$GITHUB_OUTPUT"
         fi
 
         if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
 
-          if [ "$(cat previous_${{ matrix.stacks.build_image }}.oci.sha256)" != "$(cat hash-code-current-build-image-${{ matrix.stacks.name }})" ]; then
+          if [ "$(cat previous_${{ matrix.arch.name }}-${{ matrix.stacks.build_image }}.oci.sha256)" != "$(cat hash-code-current-build-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }})" ]; then
             echo "images_need_update=true" >> "$GITHUB_OUTPUT"
           fi
         fi
 
+  # If there is no change on the usns, and there is no change on the image hash codes
+  # and the event is schedule, then there is no need to run below workflow as nothing has changed
   stack_files_changed:
     name: Determine If Stack Files Changed
     runs-on: ubuntu-22.04
-    needs: [ poll_images, preparation ] 
-    if: ${{ ! ( needs.poll_images.outputs.images_need_update == null &&  github.event_name == 'schedule' ) }}
-    strategy:
-      matrix:
-        stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
+    needs: [ preparation, poll_usns, poll_images  ]
+    if: ${{ 
+      !failure() && !cancelled() &&
+      !(
+        (needs.poll_images.outputs.images_need_update == null && 
+        needs.poll_usns.outputs.usns == null ) && 
+        github.event_name == 'schedule'
+      ) }}
     outputs:
       stack_files_changed: ${{ steps.compare.outputs.stack_files_changed }}
     steps:
@@ -177,10 +469,13 @@ jobs:
       id: compare
       run: |
         # shellcheck disable=SC2046
-        changed="$(git diff --name-only $(git describe --tags --abbrev=0) -- ${{ matrix.stacks.config_dir }})"
-        if [ -n "${changed}" ]
+        changed=$(git diff --name-only $(git describe --tags --abbrev=0) -- "${{ needs.preparation.outputs.stack_files_dir }}")
+        if [ -z "${changed}" ]
         then
-          echo "Relevant files of ${{ matrix.stacks.name }}, have changed since previous release."
+          echo "No relevant files changed since previous release."
+          echo "stack_files_changed=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "Relevant files have changed since previous release."
           echo "${changed}"
           echo "stack_files_changed=true" >> "$GITHUB_OUTPUT"
         fi
@@ -189,16 +484,53 @@ jobs:
     name: Run If Stack Files Changed
     runs-on: ubuntu-22.04
     needs: [stack_files_changed]
-    if: ${{ needs.stack_files_changed.outputs.stack_files_changed == 'true' }}
+    if: ${{ !failure() && !cancelled() && needs.stack_files_changed.outputs.stack_files_changed == 'true' }}
     steps:
     - name: Run if stack files changed
       run: |
         echo "stack files have changed"
 
+  usns_or_sha_changed:
+    name: USNs or SHAs have changed
+    runs-on: ubuntu-22.04
+    outputs: 
+      changed: ${{ steps.usns_or_sha_changed.outputs.changed }}
+    needs: [ preparation, poll_usns, poll_images ]
+    if: ${{ !failure() && !cancelled() }}
+    steps:
+      - name: Check USNs or SHAs have changed
+        id: usns_or_sha_changed
+        run: |
+          if [ '${{ needs.poll_images.result }}' != 'skipped' ]; then
+            echo "Poll images job did not skip"
+            if [ '${{ needs.poll_images.outputs.images_need_update }}' = "true" ]; then
+              echo "SHAs have changed"
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "SHAs have not changed"
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          if [ '${{ needs.poll_usns.result }}' != 'skipped' ]; then
+            echo "Poll USNs did not skip"
+            if [ '${{ needs.poll_usns.outputs.usns }}' = "true" ]; then
+              echo "USNs have changed"
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "USNs have not changed"
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
   create_stack:
     name: Create Stack
-    needs: [ poll_images, preparation ] 
-    if: ${{ ! ( needs.poll_images.outputs.images_need_update == null &&  github.event_name == 'schedule' ) }}
+    needs: [ preparation, usns_or_sha_changed ]
+    # If there is no change on the usns, and there is no change on the image hash codes
+    # and the event is schedule, then there is no need to run below workflow as nothing has changed
+    if: ${{ !failure() && !cancelled() && !( needs.usns_or_sha_changed.outputs.changed == 'false' && github.event_name == 'schedule') }}
     runs-on: ubuntu-22.04
     strategy:
       matrix:
@@ -206,6 +538,10 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+
+    # https://github.com/docker/setup-qemu-action
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
 
     - name: Create stack ${{ matrix.stacks.name }}
       id: create-stack
@@ -220,15 +556,13 @@ jobs:
                             --run-image "${{ matrix.stacks.output_dir }}/run.oci" \
                             --build-receipt current-build-receipt-${{ matrix.stacks.name }} \
                             --run-receipt current-run-receipt-${{ matrix.stacks.name }}
-        echo "build_receipt=current-build-receipt-${{ matrix.stacks.name }}" >> "$GITHUB_OUTPUT"
-        echo "run_receipt=current-run-receipt-${{ matrix.stacks.name }}" >> "$GITHUB_OUTPUT"
 
     - name: Upload run image
       uses: actions/upload-artifact@v4
       with:
         name: current-run-image-${{ matrix.stacks.name }}
         path: "${{ matrix.stacks.output_dir }}/run.oci"
-        if-no-files-found: error 
+        if-no-files-found: error
 
     - name: Upload build image
       if: ${{ matrix.stacks.create_build_image == true }}
@@ -236,25 +570,26 @@ jobs:
       with:
         name: current-build-image-${{ matrix.stacks.name }}
         path: "${{ matrix.stacks.output_dir }}/build.oci"
-        if-no-files-found: error 
+        if-no-files-found: error
 
     - name: Upload Build receipt
       if: ${{ matrix.stacks.create_build_image == true }}
       uses: actions/upload-artifact@v4
       with:
         name: current-build-receipt-${{ matrix.stacks.name }}
-        path: ${{ steps.receipts.outputs.build_receipt }}
+        path: "*current-build-receipt-${{ matrix.stacks.name }}"
         if-no-files-found: error 
 
     - name: Upload Run receipt
       uses: actions/upload-artifact@v4
       with:
         name: current-run-receipt-${{ matrix.stacks.name }}
-        path: ${{ steps.receipts.outputs.run_receipt }}
+        path: "*current-run-receipt-${{ matrix.stacks.name }}"
         if-no-files-found: error 
 
   diff:
     name: Diff Packages
+    if: ${{ !cancelled() && !failure() && needs.create_stack.result != 'skipped' }}
     outputs:
       removed_with_force: ${{ steps.removed_with_force.outputs.packages_removed }}
     needs: [ create_stack, preparation ]
@@ -262,63 +597,106 @@ jobs:
     strategy:
       matrix:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
+        arch: ${{ fromJSON(needs.preparation.outputs.architectures) }}
     steps:
-    - name: Download Build Receipt
-      if: ${{ matrix.stacks.create_build_image == true }}
+    - name: Download Current Receipt(s)
       uses: actions/download-artifact@v4
       with:
-        name: current-build-receipt-${{ matrix.stacks.name }}
+        pattern: current-*-receipt-${{ matrix.stacks.name }}
+        path: receipt-files
 
-    - name: Download Run Receipt
-      uses: actions/download-artifact@v4
-      with:
-        name: current-run-receipt-${{ matrix.stacks.name }}
+    - name: Move/Rename Build receipt properly
+      if: ${{ matrix.stacks.create_build_image == true }}
+      run: |
+        arch_prefix="${{ matrix.arch.name }}-"
+        if [[ "${{ matrix.arch.name }}" == "amd64" ]]; then
+          arch_prefix=""
+        fi
+        mv receipt-files/current-build-receipt-${{ matrix.stacks.name }}/${arch_prefix}current-build-receipt-${{ matrix.stacks.name }} ./${{ matrix.arch.name }}-current-build-receipt-${{ matrix.stacks.name }}
+
+    - name: Move/Rename Run receipt properly
+      run: |
+        arch_prefix="${{ matrix.arch.name }}-"
+        if [[ "${{ matrix.arch.name }}" == "amd64" ]]; then
+          arch_prefix=""
+        fi
+        mv receipt-files/current-run-receipt-${{ matrix.stacks.name }}/${arch_prefix}current-run-receipt-${{ matrix.stacks.name }} ./${{ matrix.arch.name }}-current-run-receipt-${{ matrix.stacks.name }}
+
+    - name: Check for Previous Releases
+      id: check_previous
+      run: |
+        gh auth status
+        # shellcheck disable=SC2046
+        if [ $(gh api "/repos/${{ github.repository }}/releases" | jq -r 'length') -eq 0 ]; then
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        echo "exists=true" >> "$GITHUB_OUTPUT"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Write Empty Previous Receipts
+      if: ${{ steps.check_previous.outputs.exists == 'false' || matrix.arch.is_new == true || matrix.stacks.is_new == true }}
+      run: |
+        if [ ${{ matrix.stacks.create_build_image }} == true ]; then
+          if [ ! -f "./${{ matrix.arch.name }}-previous-build-receipt-${{ matrix.stacks.name }}" ]; then
+            echo '{"components":[]}' > "./${{ matrix.arch.name }}-previous-build-receipt-${{ matrix.stacks.name }}"
+          fi
+        fi
+        if [ ! -f "./${{ matrix.arch.name }}-previous-run-receipt-${{ matrix.stacks.name }}" ]; then
+          echo '{"components":[]}' > "./${{ matrix.arch.name }}-previous-run-receipt-${{ matrix.stacks.name }}"
+        fi
+
+    - name: Previous receipt download filename pattern
+      if: ${{ steps.check_previous.outputs.exists == 'true' && matrix.arch.is_new == false && matrix.stacks.is_new == false }}
+      id: previous_receipt_download_pattern
+      run: |
+        if [ "${{ matrix.arch.name }}" = "amd64" ]; then
+          if [ ${{ matrix.stacks.create_build_image }} == true ]; then
+            echo "build_filename=${{ needs.preparation.outputs.github_repo_name }}-\\d+\\.\\d+(\\.\\d+)?-${{ matrix.stacks.build_receipt_filename }}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "run_filename=${{ needs.preparation.outputs.github_repo_name }}-\\d+\\.\\d+(\\.\\d+)?-${{ matrix.stacks.run_receipt_filename }}" >> "$GITHUB_OUTPUT"
+        else
+          if [ ${{ matrix.stacks.create_build_image }} == true ]; then
+            echo "build_filename=${{ matrix.arch.name }}-${{ matrix.stacks.build_receipt_filename }}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "run_filename=${{ matrix.arch.name }}-${{ matrix.stacks.run_receipt_filename }}" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Find and Download Previous Build Receipt
-      id: download_previous_build_receipt
-      if: ${{ matrix.stacks.create_build_image == true }}
+      if: ${{ matrix.stacks.create_build_image == true &&  steps.check_previous.outputs.exists == 'true' && matrix.arch.is_new == false && matrix.stacks.is_new == false }}
       uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
       with:
-        asset_pattern: "${{ matrix.stacks.build_receipt_filename }}"
+        asset_pattern: "${{ steps.previous_receipt_download_pattern.outputs.build_filename }}"
         search_depth: 1
         repo: ${{ github.repository }}
-        output_path: "/github/workspace/previous-build-receipt-${{ matrix.stacks.name }}"
+        output_path: "/github/workspace/${{ matrix.arch.name }}-previous-build-receipt-${{ matrix.stacks.name }}"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
     - name: Find and Download Previous Run Receipt
-      id: download_previous_run_receipt
+      if: ${{  steps.check_previous.outputs.exists == 'true' && matrix.arch.is_new == false && matrix.stacks.is_new == false }}
       uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
       with:
-        asset_pattern: "${{ matrix.stacks.run_receipt_filename }}"
+        asset_pattern: "${{ steps.previous_receipt_download_pattern.outputs.run_filename }}"
         search_depth: 1
         repo: ${{ github.repository }}
-        output_path: "/github/workspace/previous-run-receipt-${{ matrix.stacks.name }}"
+        output_path: "/github/workspace/${{ matrix.arch.name }}-previous-run-receipt-${{ matrix.stacks.name }}"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-    - name: Write Empty Previous Run Receipts
-      if: ${{ steps.download_previous_run_receipt.outputs.output_path == '' }}
-      run: |
-        echo '{"components":[]}' > "${{ github.workspace }}/previous-run-receipt-${{ matrix.stacks.name }}"
-
-    - name: Write Empty Previous Build Receipts
-      if: ${{ matrix.stacks.create_build_image == true && steps.download_previous_build_receipt.outputs.output_path == '' }}
-      run: |
-        echo '{"components":[]}' > "${{ github.workspace }}/previous-build-receipt-${{ matrix.stacks.name }}"
 
     - name: Compare Build Packages
       id: build_diff
       if: ${{ matrix.stacks.create_build_image == true }}
       uses: paketo-buildpacks/github-config/actions/stack/diff-package-receipts@main
       with:
-        previous: "/github/workspace/previous-build-receipt-${{ matrix.stacks.name }}"
-        current: "/github/workspace/current-build-receipt-${{ matrix.stacks.name }}"
+        previous: "/github/workspace/${{ matrix.arch.name }}-previous-build-receipt-${{ matrix.stacks.name }}"
+        current: "/github/workspace/${{ matrix.arch.name }}-current-build-receipt-${{ matrix.stacks.name }}"
 
     - name: Compare Run Packages
       id: run_diff
       uses: paketo-buildpacks/github-config/actions/stack/diff-package-receipts@main
       with:
-        previous: "/github/workspace/previous-run-receipt-${{ matrix.stacks.name }}"
-        current: "/github/workspace/current-run-receipt-${{ matrix.stacks.name }}"
+        previous: "/github/workspace/${{ matrix.arch.name }}-previous-run-receipt-${{ matrix.stacks.name }}"
+        current: "/github/workspace/${{ matrix.arch.name }}-current-run-receipt-${{ matrix.stacks.name }}"
 
     - name: Fail If Packages Removed
       id: removed_with_force
@@ -332,13 +710,15 @@ jobs:
          echo "Run packages removed: ${run}"
 
          # only fail if packages are removed AND the release has not been forced
-         if ([ "${build}" -gt 0 ] && [ "${{ matrix.stacks.create_build_image }}" == "true"  ]) || [ "${run}" -gt 0 ]; then
+         if ( [ "${build}" -gt 0 ] && [ "${{ matrix.stacks.create_build_image }}" == "true" ] ) || [ "${run}" -gt 0 ]; then
            if [ "${{ github.event.inputs.force }}" != 'true' ]; then
              echo "Packages removed without authorization. Stack cannot be released."
              exit 1
            else
              echo "packages_removed=true" >> "$GITHUB_OUTPUT"
            fi
+         else
+           echo "packages_removed=false" >> "$GITHUB_OUTPUT"
          fi
       env:
         BUILD_REMOVED: ${{ steps.build_diff.outputs.removed }}
@@ -347,8 +727,8 @@ jobs:
     - name: Create/Upload variable artifacts
       id: variable_artifacts
       run: |
-        mkdir -p diff-${{ matrix.stacks.name }}
-        cd diff-${{ matrix.stacks.name }}
+        mkdir -p diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
+        cd diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
 
         if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
          echo '${{ steps.build_diff.outputs.added }}' > build_added
@@ -360,174 +740,41 @@ jobs:
         echo '${{ steps.run_diff.outputs.modified }}' > run_modified
         echo '${{ steps.run_diff.outputs.removed }}' > run_removed_with_force
 
-    - name: Upload diff-${{ matrix.stacks.name }}
+    - name: Upload diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
       uses: actions/upload-artifact@v4
       with:
-        name: diff-${{ matrix.stacks.name }}
-        path: diff-${{ matrix.stacks.name }}
+        name: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
+        path: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
+        if-no-files-found: error 
 
-  run_if_packages_removed_with_force:
-    name: Run If Packages Removed With Force
-    needs: [ diff ]
-    runs-on: ubuntu-22.04
-    if: ${{ needs.diff.outputs.removed_with_force == 'true' }}
-    steps:
-    - name: Run if packages removed with force
-      run: |
-        echo "packages removed with user-provided force"
-
-  packages_changed:
-    name: Determine If Packages Changed
-    needs: [ diff, preparation ]
-    runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
-    outputs:
-      packages_changed: ${{ steps.compare.outputs.packages_changed }}
-    steps:
-    - name: Download diff-${{ matrix.stacks.name }}
+    - name: Download USN File(s)
+      if: ${{ needs.preparation.outputs.polling_type == 'usn' }}
       uses: actions/download-artifact@v4
       with:
-       name: diff-${{ matrix.stacks.name }}
+        path: "patched-usns"
+        pattern: ${{ matrix.arch.name }}-*${{ env.PATCHED_USNS_FILENAME }}
+        merge-multiple: true
 
-    - name: Create env variables
+    - name: Get USNs
+      id: get-usns
+      if: ${{ needs.preparation.outputs.polling_type == 'usn' }}
       run: |
-        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
-          echo "BUILD_ADDED=$(cat build_added)" >> $GITHUB_ENV
-          echo "BUILD_MODIFIED=$(cat build_modified)" >> $GITHUB_ENV
-        fi
-        echo "RUN_ADDED=$(cat run_added)" >> $GITHUB_ENV
-        echo "RUN_MODIFIED=$(cat run_modified)" >> $GITHUB_ENV
+        usns=$(cat "patched-usns/${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}" | jq -c )
+        echo "usns=$usns" >> "$GITHUB_OUTPUT"
 
-    - name: Compare With Previous Release
-      id: compare
+    - name: Get Repository Name
+      id: repo_name
       run: |
-        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
-          # shellcheck disable=SC2153
-          build_added=$(jq '. | length' <<< "${BUILD_ADDED}")
-          echo "Build packages added: ${build_added}"
+        full=${{ github.repository }}
+        # Strip off the org and slash from repo name
+        # paketo-buildpacks/repo-name --> repo-name
+        repo=$(echo "${full}" | sed 's/^.*\///')
+        echo "github_repo_name=${repo}" >> "$GITHUB_OUTPUT"
 
-          # shellcheck disable=SC2153
-          build_modified=$(jq '. | length' <<< "${BUILD_MODIFIED}")
-          echo "Build packages modified: ${build_modified}"
-        fi
-
-        # shellcheck disable=SC2153
-        run_added=$(jq '. | length' <<< "${RUN_ADDED}")
-        echo "Run packages added: ${run_added}"
-
-        # shellcheck disable=SC2153
-        run_modified=$(jq '. | length' <<< "${RUN_MODIFIED}")
-        echo "Run packages modified: ${run_modified}"
-
-        if [ "${run_added}" -eq 0 ] && [ "${run_modified}" -eq 0 ]; then
-          echo "No packages changed."
-          # we dont set the "packages_changed" to false, as is already null
-          # and also due to parallelization, it will override any true value
-        else
-          echo "Packages changed."
-          echo "packages_changed=true" >> "$GITHUB_OUTPUT"
-        fi
-
-        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
-          if [ "${build_added}" -eq 0 ] && [ "${build_modified}" -eq 0 ]; then
-            echo "No packages changed."
-            # we dont set the "packages_changed" to false, as is already null
-            # and also due to parallelization, it will override the value
-          else
-            echo "Packages changed."
-            echo "packages_changed=true" >> "$GITHUB_OUTPUT"
-          fi
-        fi
-
-  run_if_packages_changed:
-    name: Run If Packages Changed
-    runs-on: ubuntu-22.04
-    needs: [packages_changed]
-    if: ${{ needs.packages_changed.outputs.packages_changed == 'true' }}
-    steps:
-    - name: Run if packages changed
-      run: |
-        echo "packages have changed"
-
-  test:
-    name: Acceptance Test
-    needs: [ create_stack, preparation ]
-    runs-on: ubuntu-22.04
-    steps:
-    - name: Setup Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: 'stable'
-
-    - name: Checkout
-      uses: actions/checkout@v4
-    
-    - name: tests ran
-      run: echo "tests ran"
-
-    - name: Download Build images
-      uses: actions/download-artifact@v4
-      with:
-        pattern: |
-           current-build-image-*
-    
-    - name: Download Run images
-      uses: actions/download-artifact@v4
-      with:
-        pattern: |
-           current-run-image-*
-
-    - name: Create OCI artifacts destination directory
-      run: |
-        echo '${{ needs.preparation.outputs.stacks }}' | jq -c '.[]' | while read -r stack; do
-          name=$(echo "$stack" | jq -r '.name')
-          output_dir=$(echo "$stack" | jq -r '.output_dir')
-          create_build_image=$(echo "$stack" | jq -r '.create_build_image')
-          mkdir -p $output_dir
-          mv "current-run-image-${name}/run.oci" "${output_dir}/run.oci"
-          if [ $create_build_image == 'true' ]; then
-            mv "current-build-image-${name}/build.oci" "${output_dir}/build.oci"
-          fi
-        done
-
-    - name: Run Acceptance Tests
-      run: ./scripts/test.sh
-
-  force_release_creation:
-    name: Force Release Creation
-    runs-on: ubuntu-22.04
-    if: ${{github.event.inputs.force == 'true'}}
-    steps:
-    - name: Signal force release creation
-      run: |
-        echo "Force release creation input set to true"
-
-  release:
-    name: Release
-    runs-on: ubuntu-22.04
-    needs: [create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, run_if_packages_removed_with_force, test, force_release_creation, preparation ]
-    if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' && (needs.run_if_packages_changed.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
-    strategy:
-      matrix:
-        stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
-    outputs:
-      tag: ${{ steps.tag.outputs.tag }}
-    steps:
-    - name: Print Release Reasoning
-      run: |
-        printf "Diff Packages: %s\n" "${{ needs.diff.result }}"
-        printf "Acceptance Tests: %s\n" "${{ needs.test.result }}"
-        printf "Run If Packages Changed: %s\n" "${{ needs.run_if_packages_changed.result }}"
-        printf "Run If Packages Removed With Force: %s\n" "${{ needs.run_if_packages_removed_with_force.result }}"
-        printf "Run If Stack Files Changed: %s\n" "${{ needs.run_if_stack_files_changed.result }}"
-        printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
-
-    - name: Checkout With History
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # gets full history
+        # Strip off 'stack' suffix from repo name
+        # some-name-stack --> some-name
+        registry_repo="${repo//-stack/}"
+        echo "registry_repo_name=${registry_repo}" >> "$GITHUB_OUTPUT"
 
     - name: Increment Tag
       if: github.event.inputs.version == ''
@@ -545,221 +792,567 @@ jobs:
         fi
         echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
-    - name: Get Repository Name
-      id: repo_name
-      run: |
-        full=${{ github.repository }}
-        # Strip off the org and slash from repo name
-        # paketo-buildpacks/jammy-base-stack --> jammy-base-stack
-        repo=$(echo "${full}" | sed 's/^.*\///')
-        echo "github_repo_name=${repo}" >> "$GITHUB_OUTPUT"
-        # Strip off 'stack' suffix from repo name
-        # paketo-buildpacks/jammy-base-stack --> jammy-base
-        registry_repo="${repo//-stack/}"
-        echo "registry_repo_name=${registry_repo}" >> "$GITHUB_OUTPUT"
-
-    - name: Download diff-${{ matrix.stacks.name }}
-      uses: actions/download-artifact@v4
-      with:
-       name: diff-${{ matrix.stacks.name }}
-
-    - name: Release notes preparation
-      id: release_notes_preparation
+    - name: Get registry build and run image names
+      id: registry_names
       run: |
         if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
           echo "build_image=${{ needs.preparation.outputs.repo_owner }}/${{ matrix.stacks.build_image }}-${{ needs.preparation.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}" >> "$GITHUB_OUTPUT"
-          echo "build_added=$(jq -c <<< "$(cat build_added)" )" >> "$GITHUB_OUTPUT"
-          echo "build_modified=$(jq -c <<< "$(cat build_modified)" )" >> "$GITHUB_OUTPUT"
-          echo "build_removed_with_force=$(jq -c <<< "$(cat build_removed_with_force)" )" >> "$GITHUB_OUTPUT"
         else
           echo "build_image=" >> "$GITHUB_OUTPUT"
-          echo "build_added=" >> "$GITHUB_OUTPUT"
-          echo "build_modified=" >> "$GITHUB_OUTPUT"
-          echo "build_removed_with_force=" >> "$GITHUB_OUTPUT"
         fi
 
         echo "run_image=${{ needs.preparation.outputs.repo_owner }}/${{ matrix.stacks.run_image }}-${{ needs.preparation.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}" >> "$GITHUB_OUTPUT"
-        echo "run_added=$(jq -c <<< "$(cat run_added)" )" >> "$GITHUB_OUTPUT"
-        echo "run_modified=$(jq -c <<< "$(cat run_modified)" )" >> "$GITHUB_OUTPUT"
-        echo "run_removed_with_force=$(jq -c <<< "$(cat run_removed_with_force)" )" >> "$GITHUB_OUTPUT"
 
-    - name: Fetch Receipts show limit
-      id: fetch_receipts_show_limit
-      run: |
-        if [[ -f ${{ env.STACKS_FILENAME }} ]]; then
-          echo "receipts_show_limit=$( jq -r '.receipts_show_limit // ""' ${{ env.STACKS_FILENAME }} )" >> "$GITHUB_OUTPUT"
-        fi
-
-    - name: Create Release Notes
-      id: notes
+    - name: Create Release Notes per Arch and per Stack
+      id: notes_arc_stack
       uses: paketo-buildpacks/github-config/actions/stack/release-notes@main
       with:
-        build_image: ${{ steps.release_notes_preparation.outputs.build_image }}
-        run_image: ${{ steps.release_notes_preparation.outputs.run_image }}
-        build_packages_added: ${{ steps.release_notes_preparation.outputs.build_added }}
-        build_packages_modified: ${{ steps.release_notes_preparation.outputs.build_modified }}
-        build_packages_removed_with_force: ${{ steps.release_notes_preparation.outputs.build_removed_with_force }}
-        run_packages_added: ${{ steps.release_notes_preparation.outputs.run_added }}
-        run_packages_modified: ${{ steps.release_notes_preparation.outputs.run_modified }}
-        run_packages_removed_with_force: ${{ steps.release_notes_preparation.outputs.run_removed_with_force }}
-        receipts_show_limit: ${{ steps.fetch_receipts_show_limit.outputs.receipts_show_limit }}
+        build_image: ${{ steps.registry_names.outputs.build_image }}
+        run_image: ${{ steps.registry_names.outputs.run_image }}
+        build_packages_added: ${{ steps.build_diff.outputs.added }}
+        build_packages_modified: ${{ steps.build_diff.outputs.modified }}
+        build_packages_removed_with_force: ${{ steps.build_diff.outputs.removed }}
+        run_packages_added: ${{ steps.run_diff.outputs.added }}
+        run_packages_modified: ${{ steps.run_diff.outputs.modified }}
+        run_packages_removed_with_force: ${{ steps.run_diff.outputs.removed }}
         supports_usns: ${{ needs.preparation.outputs.support_usns }}
+        patched_usns: ${{ needs.get-usns.outputs.usns }}
 
-    - name: Setup Release Assets
-      id: assets
+    - name: Release Notes File
+      id: release-notes-file
       run: |
-        assets="$(jq --null-input --compact-output \
-          --arg tag "${{ steps.tag.outputs.tag }}" \
-          --arg repo "${{ steps.repo_name.outputs.github_repo_name }}" \
-          --arg build_receipt "${{ matrix.stacks.build_receipt_filename }}" \
-          --arg run_receipt "${{ matrix.stacks.run_receipt_filename }}" \
-          '[
-            {
-              "path": ("current-build-image-${{ matrix.stacks.name }}/build" + ".oci"),
-              "name": ($repo + "-" + $tag + "-" + "${{ matrix.stacks.build_image }}.oci"),
-              "content_type": "application/gzip"
-            },
-            {
-              "path": ("current-run-image-${{ matrix.stacks.name }}/run" + ".oci"),
-              "name": ($repo + "-" + $tag + "-" + "${{ matrix.stacks.run_image }}.oci"),
-              "content_type": "application/gzip"
-            },
-            {
-              "path": ("current-build-receipt-${{ matrix.stacks.name }}"),
-              "name": ($repo + "-" + $tag + "-" + $build_receipt),
-              "content_type": "text/plain"
-            },
-            {
-              "path": ("current-run-receipt-${{ matrix.stacks.name }}"),
-              "name": ($repo + "-" + $tag + "-" + $run_receipt),
-              "content_type": "text/plain"
-            },
-            {
-              "path": ("hash-code-current-build-image-${{ matrix.stacks.name }}"),
-              "name": ($repo + "-" + $tag + "-" + "${{ matrix.stacks.build_image }}.oci.sha256"),
-              "content_type": "application/gzip"
-            },
-            {
-              "path": ("hash-code-current-run-image-${{ matrix.stacks.name }}"),
-              "name": ($repo + "-" + $tag + "-" + "${{ matrix.stacks.run_image }}.oci.sha256"),
-              "content_type": "application/gzip"
-            }]')"
+        printf '%s\n' '${{ steps.notes_arc_stack.outputs.release_body }}' > "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
 
-        # Exclude/filter the assets that are not required for the release.
-          if [ "${{ matrix.stacks.create_build_image }}" == "false" ]; then
-          assets=$(jq -c --arg stack_name "${{ matrix.stacks.name }}" '[ 
-            .[] 
-            | select(
-                .path 
-                | (contains("current-build-image-" + $stack_name + "/build.oci")
-                or contains("hash-code-current-build-image-" + $stack_name)
-                or contains("current-build-receipt-" + $stack_name))
-                | not
-            )
-          ]' <<< "$assets")
+    - name: Upload ${{ matrix.arch.name }} release notes file for stack ${{ matrix.stacks.name }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
+        path: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
+
+  run_if_packages_removed_with_force:
+    name: Run If Packages Removed With Force
+    needs: [ diff ]
+    runs-on: ubuntu-22.04
+    if: ${{ needs.diff.outputs.removed_with_force == 'true' }}
+    steps:
+    - name: Run if packages removed with force
+      run: |
+        echo "packages removed with user-provided force"
+
+  packages_changed:
+    name: Determine If Packages Changed
+    needs: [ diff, preparation ]
+    runs-on: ubuntu-22.04
+    if: ${{ !cancelled() && !failure() && needs.diff.result != 'skipped' }}
+    strategy:
+      matrix:
+        stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
+        arch: ${{ fromJSON(needs.preparation.outputs.architectures) }}
+    outputs:
+      packages_changed: ${{ steps.compare.outputs.packages_changed }}
+    steps:
+    - name: Download diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
+      uses: actions/download-artifact@v4
+      with:
+       name: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
+
+    - name: Set env diff variables
+      run: |
+
+        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
+          BUILD_ADDED=$(cat ./build_added)
+          BUILD_MODIFIED=$(cat ./build_modified)
+          echo "BUILD_ADDED=$BUILD_ADDED" >> $GITHUB_ENV
+          echo "BUILD_MODIFIED=$BUILD_MODIFIED" >> $GITHUB_ENV
+        else
+          echo "BUILD_ADDED=$BUILD_ADDED" >> $GITHUB_ENV
+          echo "BUILD_MODIFIED=$BUILD_MODIFIED" >> $GITHUB_ENV
         fi
 
-        echo "${assets}" > release-assets-${{ matrix.stacks.name }}
+        RUN_ADDED=$(cat ./run_added)
+        RUN_MODIFIED=$(cat ./run_modified)
+        echo "RUN_ADDED=$RUN_ADDED" >> $GITHUB_ENV
+        echo "RUN_MODIFIED=$RUN_MODIFIED" >> $GITHUB_ENV
 
-    - name: Save release notes
-      id: save_notes
+    - name: Compare With Previous Release
+      id: compare
       run: |
-        echo '${{ steps.notes.outputs.release_body }}' > release-body-${{ matrix.stacks.name }}
+        # shellcheck disable=SC2153
 
-    - name: Upload release notes of ${{ matrix.stacks.name }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: release-body-${{ matrix.stacks.name }}
-        path: release-body-${{ matrix.stacks.name }}
+        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
+          build_added=$(cat ./build_added | jq 'length')
+          echo "Build packages added: ${build_added}"
 
-    - name: Upload release assets of ${{ matrix.stacks.name }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: release-assets-${{ matrix.stacks.name }}
-        path: release-assets-${{ matrix.stacks.name }}
+          # shellcheck disable=SC2153
+          build_modified=$(cat ./build_modified | jq 'length')
+          echo "Build packages modified: ${build_modified}"
+        fi
 
-  create_release:
-    name: Create Release
+        # shellcheck disable=SC2153
+        run_added=$(jq '. | length' <<< "${RUN_ADDED}")
+        echo "Run packages added: ${run_added}"
+
+        # shellcheck disable=SC2153
+        run_modified=$(jq '. | length' <<< "${RUN_MODIFIED}")
+        echo "Run packages modified: ${run_modified}"
+
+        if [ "${build_added}" -eq 0 ] && [ "${build_modified}" -eq 0 ] && [ "${run_added}" -eq 0 ] && [ "${run_modified}" -eq 0 ]; then
+          echo "No packages changed."
+          # We ommit setting "packages_changed" variable to false, 
+          # as there is an edge case scenario overriding any true value due to parallelization
+        else
+          echo "Packages changed."
+          echo "packages_changed=true" >> "$GITHUB_OUTPUT"
+        fi
+
+  run_if_packages_changed:
+    name: Run If Packages Changed
     runs-on: ubuntu-22.04
-    needs: release
-    if: ${{ always() && needs.release.result == 'success' }}
+    needs: [packages_changed]
+    if: ${{ needs.packages_changed.outputs.packages_changed == 'true' && !cancelled() }}
     steps:
-    - name: download release assets
-      uses: actions/download-artifact@v4
-      with:
-        pattern: release-assets-*
-        merge-multiple: true
-
-    - name: Merge release assets
-      id: merge_release_assets
+    - name: Run if packages changed
       run: |
-        merged_release_assets='[]'
-        for file in release-assets-*; do
-          merged_release_assets=$(jq -s add "$file" <(echo "$merged_release_assets") | jq -c)
-        done
+        echo "packages have changed"
 
-        printf "assets=%s\n" "${merged_release_assets}" >> "$GITHUB_OUTPUT"
-
-    - name: Download release bodies
-      uses: actions/download-artifact@v4
+  test:
+    name: Acceptance Test
+    needs: [ preparation, create_stack ]
+    if: ${{ !cancelled() && !failure() && needs.create_stack.result != 'skipped' }}
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Setup Go
+      uses: actions/setup-go@v5
       with:
-        pattern: release-body-*
-        merge-multiple: true
+        go-version: stable
 
-    - name: Merge release bodies
-      id: merge_release_bodies
-      run: |
-        touch release_notes
-        for filename in release-body-*; do
-          cat "$filename" >> release_notes
-          echo >> release_notes
-        done
+    - name: Checkout
+      uses: actions/checkout@v4
 
-    - name: Download current build images
+    - name: Download Build Image(s)
       uses: actions/download-artifact@v4
       with:
         pattern: current-build-image-*
 
-    - name: Download current run images
+    - name: Download Run Image(s)
       uses: actions/download-artifact@v4
       with:
         pattern: current-run-image-*
 
-    - name: Download current hash codes
-      uses: actions/download-artifact@v4
-      with:
-        pattern: hash-code-*
-        merge-multiple: true
+    - name: Create OCI artifacts destination directory
+      run: |
+        echo '${{ needs.preparation.outputs.stacks }}' | jq -c '.[]' | while read -r stack; do
+          name=$(echo "$stack" | jq -r '.name')
+          output_dir=$(echo "$stack" | jq -r '.output_dir')
+          create_build_image=$(echo "$stack" | jq -r '.create_build_image')
+          mkdir -p $output_dir
+          mv "current-run-image-${name}/run.oci" "${output_dir}/run.oci"
+          if [ $create_build_image == 'true' ]; then
+            mv "current-build-image-${name}/build.oci" "${output_dir}/build.oci"
+          fi
+        done
 
-    - name: Download Build Receipts
+    - name: Run Acceptance Tests
+      run: ./scripts/test.sh --validate-stack-builds
+
+  force_release_creation:
+    name: Force Release Creation
+    runs-on: ubuntu-22.04
+    if: ${{github.event.inputs.force == 'true'}}
+    steps:
+    - name: Signal force release creation
+      run: |
+        echo "Force release creation input set to true"
+
+  release:
+    name: Release
+    runs-on: ubuntu-22.04
+    needs: [create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, run_if_packages_removed_with_force, test, force_release_creation, preparation ]
+    if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' && (needs.run_if_packages_changed.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+    - name: Print Release Reasoning
+      run: |
+        printf "Diff Packages: %s\n" "${{ needs.diff.result }}"
+        printf "Acceptance Tests: %s\n" "${{ needs.test.result }}"
+        printf "Run If Packages Changed: %s\n" "${{ needs.run_if_packages_changed.result }}"
+        printf "Run If Packages Removed With Force: %s\n" "${{ needs.run_if_packages_removed_with_force.result }}"
+        printf "Run If Stack Files Changed: %s\n" "${{ needs.run_if_stack_files_changed.result }}"
+        printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
+
+    - name: Checkout With History
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # gets full history
+
+    - name: Download current build image(s)
       uses: actions/download-artifact@v4
       with:
+        path: image-files
+        pattern: current-build-image-*
+
+    - name: Download current run image(s)
+      uses: actions/download-artifact@v4
+      with:
+        path: image-files
+        pattern: current-run-image-*
+
+    - name: Display Build and Run Images
+      run: ls image-files
+
+    - name: Download Build Receipt(s)
+      uses: actions/download-artifact@v4
+      with:
+        path: receipt-files
         pattern: current-build-receipt-*
         merge-multiple: true
 
-    - name: Download Run Receipts
+    - name: Download Run Receipt(s)
       uses: actions/download-artifact@v4
       with:
+        path: receipt-files
         pattern: current-run-receipt-*
         merge-multiple: true
+
+    - name: Display Receipts
+      run: ls receipt-files
+
+    - name: Download Release Note File(s)
+      uses: actions/download-artifact@v4
+      with:
+        path: release-notes
+        pattern: "*release-notes.md"
+        merge-multiple: true
+
+    - name: Display Release Note Files
+      run: ls release-notes
+
+    - name: Download hash code Files
+      if: ${{ needs.preparation.outputs.polling_type == 'hash' }}
+      uses: actions/download-artifact@v4
+      with:
+        path: hash-code-files
+        pattern: hash-code-*
+        merge-multiple: true
+
+    - name: Display hash code Files
+      if: ${{ needs.preparation.outputs.polling_type == 'hash' }}
+      run: ls hash-code-files
+
+    - name: Download USN Files
+      if: ${{ needs.preparation.outputs.polling_type == 'usn' }}
+      uses: actions/download-artifact@v4
+      with:
+        path: usn-files
+        pattern: "*${{ env.PATCHED_USNS_FILENAME }}"
+        merge-multiple: true
+
+    - name: Display USN Files
+      if: ${{ needs.preparation.outputs.polling_type == 'usn' }}
+      run: ls usn-files
+
+    - name: Increment Tag
+      if: github.event.inputs.version == ''
+      id: semver
+      uses: paketo-buildpacks/github-config/actions/tag/increment-tag@main
+      with:
+        allow_head_tagged: true
+
+    - name: Set Release Tag
+      id: tag
+      run: |
+        tag="${{ github.event.inputs.version }}"
+        if [ -z "${tag}" ]; then
+          tag="${{ steps.semver.outputs.tag }}"
+        fi
+        echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+    - name: Setup Release Assets
+      id: assets
+      run: |
+
+        stacks=$(echo '${{ needs.preparation.outputs.stacks }}' | jq -c '.[]')
+        archs=$(echo '${{ needs.preparation.outputs.architectures }}' | jq -c -r '.[]')
+        repo="${{ needs.preparation.outputs.github_repo_name }}"
+        tag="${{ steps.tag.outputs.tag }}"
+
+        # Start with an empty array
+        assets=$(jq -n -c '[]')
+
+        for stack in $stacks; do
+          stack_name=$(echo "$stack" | jq -r '.name')
+          run_image=$(echo "$stack" | jq -r '.run_image')
+          create_build_image=$(echo "$stack" | jq -r '.create_build_image // false')
+          run_receipt_filename=$(echo "$stack" | jq -r '.run_receipt_filename')
+
+          assets="$(jq -c \
+            --arg image_filepath "image-files" \
+            --arg stack_name "${stack_name}" \
+            --arg run_image "${run_image}" \
+            --arg tag "${{ steps.tag.outputs.tag }}" \
+            --arg repo "${{ needs.preparation.outputs.github_repo_name }}" \
+            '. += [
+                {
+                  "path": ($image_filepath + "/" + "current-run-image-" + $stack_name + "/run" + ".oci"),
+                  "name": ($repo + "-" + $tag + "-" + $run_image + ".oci"),
+                  "content_type": "application/gzip"
+                }
+              ]' <<<"${assets}")"
+
+          if [[ $create_build_image == true ]]; then
+            build_image=$(echo "$stack" | jq -r '.build_image')
+            assets="$(jq -c \
+              --arg image_filepath "image-files" \
+              --arg stack_name "${stack_name}" \
+              --arg build_image "${build_image}" \
+              --arg tag "${{ steps.tag.outputs.tag }}" \
+              --arg repo "${{ needs.preparation.outputs.github_repo_name }}" \
+              '. += [
+                  {
+                    "path": ($image_filepath + "/" + "current-build-image-" + $stack_name + "/build" + ".oci"),
+                    "name": ($repo + "-" + $tag + "-" + $build_image + ".oci"),
+                    "content_type": "application/gzip"
+                  }
+                ]' <<<"${assets}")"
+          fi
+
+          for arch in $archs; do
+            arch_name=$(echo "$arch" | jq -r '.name')
+            arch_prefix="-${arch_name}-"
+            if [[ $arch_name == "amd64" ]]; then
+              arch_prefix="-"
+            fi
+
+            if [ "${{ needs.preparation.outputs.polling_type }}" = "hash" ]; then
+              ## Add the Hash code files of the run images to the assets
+              run_image=$(echo "$stack" | jq -r '.run_image')
+              assets="$(jq -c \
+                --arg hash_code_filepath "hash-code-files" \
+                --arg stack_name "${stack_name}" \
+                --arg run_image "${run_image}" \
+                --arg tag "${{ steps.tag.outputs.tag }}" \
+                --arg repo "${{ needs.preparation.outputs.github_repo_name }}" \
+                --arg arch "${arch_name}" \
+                --arg arch_prefix "${arch_prefix}" \
+                '. += [
+                  {
+                    "path": ($hash_code_filepath + "/" + "hash-code-current-run-image-"+ $arch + "-" + $stack_name ),
+                    "name": ($repo + "-" + $tag + $arch_prefix + $run_image + ".oci.sha256"),
+                    "content_type": "text/plain"
+                  }
+                ]' <<<"${assets}")"
+
+              ## Add the Hash code files of the build images to the assets
+              if [[ $create_build_image == true ]]; then
+                build_image=$(echo "$stack" | jq -r '.build_image')
+                assets="$(jq -c \
+                  --arg hash_code_filepath "hash-code-files" \
+                  --arg stack_name "${stack_name}" \
+                  --arg build_image "${build_image}" \
+                  --arg tag "${{ steps.tag.outputs.tag }}" \
+                  --arg repo "${{ needs.preparation.outputs.github_repo_name }}" \
+                  --arg arch "${arch_name}" \
+                  --arg arch_prefix "${arch_prefix}" \
+                  '. += [
+                    {
+                      "path": ($hash_code_filepath + "/" + "hash-code-current-build-image-"+ $arch + "-" + $stack_name ),
+                      "name": ($repo + "-" + $tag + $arch_prefix + $build_image + ".oci.sha256"),
+                      "content_type": "text/plain"
+                    }
+                  ]' <<<"${assets}")"
+              fi
+            fi
+          done
+        done
+
+        ## Adding the SBOM files to the assets
+        for stack in $stacks; do
+          for arch in $archs; do
+            arch_name=$(echo "$arch" | jq -r '.name')
+
+            stack_name=$(echo "$stack" | jq -r '.name')
+            run_receipt_filename=$(echo "$stack" | jq -r '.run_receipt_filename')
+
+            receipt_file_name=$(
+              echo '[ "'"$arch_name"'" ,"current-run-receipt" , "'"$stack_name"'"  ]' |
+                jq -r 'map(select(. != "amd64")) | join("-")'
+            )
+
+            receipt_asset_name=$(
+              echo '[ "'"$repo"'", "'"$tag"'", "'"$arch_name"'", "'"$run_receipt_filename"'"  ]' |
+                jq -r 'map(select(. != "amd64")) | map(select(. != "default")) | join("-")'
+            )
+
+            assets="$(jq -c \
+              --arg receipts_filepath "receipt-files" \
+              --arg receipt_file_name "${receipt_file_name}" \
+              --arg receipt_asset_name "${receipt_asset_name}" \
+              '. += [
+                  {
+                    "path": ($receipts_filepath + "/" + $receipt_file_name),
+                    "name": $receipt_asset_name,
+                    "content_type": "text/plain"
+                  }
+                ]' <<<"${assets}")"
+
+            create_build_image=$(echo "$stack" | jq -r '.create_build_image // false')
+
+            if [[ $create_build_image == true ]]; then
+              build_receipt_filename=$(echo "$stack" | jq -r '.build_receipt_filename')
+
+              receipt_file_name=$(
+                echo '[ "'"$arch_name"'" ,"current-build-receipt" , "'"$stack_name"'"  ]' |
+                  jq -r 'map(select(. != "amd64")) | join("-")'
+              )
+
+              receipt_asset_name=$(
+                echo '[ "'"$repo"'", "'"$tag"'", "'"$arch_name"'", "'"$build_receipt_filename"'"  ]' |
+                  jq -r 'map(select(. != "amd64")) | map(select(. != "default")) | join("-")'
+              )
+
+              assets="$(jq -c \
+                --arg receipts_filepath "receipt-files" \
+                --arg receipt_file_name "${receipt_file_name}" \
+                --arg receipt_asset_name "${receipt_asset_name}" \
+                --arg tag "${{ steps.tag.outputs.tag }}" \
+                --arg repo "${{ needs.preparation.outputs.github_repo_name }}" \
+                --arg arch_prefix "${arch_prefix}" \
+                '. += [
+                  {
+                    "path": ($receipts_filepath + "/" + $receipt_file_name),
+                    "name": $receipt_asset_name,
+                    "content_type": "text/plain"
+                  }
+                ]' <<<"${assets}")"
+            fi
+          done
+        done
+
+        ## Add the usn files to the assets
+        if [ "${{ needs.preparation.outputs.polling_type }}" = "usn" ]; then
+          for stack in $stacks; do
+            stack_name=$(echo "$stack" | jq -r '.name')
+            stack_name_prefix="${stack}"
+            if [[ $stack_name == "default" ]]; then
+              stack_name_prefix=""
+            fi
+
+            for arch in $archs; do
+              arch_name=$(echo "$arch" | jq -r '.name')
+              arch_prefix="${arch_name}"
+              if [[ $arch_name == "amd64" ]]; then
+                arch_prefix=""
+              fi
+
+              usn_asset_name=$(
+                echo '[
+                  "${{ needs.preparation.outputs.github_repo_name }}",
+                  "${{ steps.tag.outputs.tag }}",
+                  "'"$stack_name_prefix"'",
+                  "'"$arch_prefix"'",
+                  "${{ env.PATCHED_USNS_FILENAME }}"
+                ]' | jq -r 'map(select(length > 0)) | join("-")'
+              )
+
+              assets="$(jq -c \
+                --arg usns_filepath "usn-files" \
+                --arg stack_name "${stack_name}" \
+                --arg arch "${arch_name}" \
+                --arg usn_asset_name "${usn_asset_name}" \
+                --arg patched_usns_suffix "${{ env.PATCHED_USNS_FILENAME }}" \
+                '. += [
+                {
+                  "path": ($usns_filepath + "/" + $arch + "-" + $stack_name + "-" + $patched_usns_suffix),
+                  "name": $usn_asset_name,
+                  "content_type": "text/plain"
+                }
+              ]' <<< "${assets}")"
+            done
+          done
+        fi
+
+        # Merge relase notes per architecture and add them to the assets
+        release_notes_dir="release-notes"
+        for arch in $archs; do
+          arch_name=$(echo "$arch" | jq -r '.name')
+          arch_prefix="-${arch_name}-"
+          if [[ $arch_name == "amd64" ]]; then
+            arch_prefix="-"
+          fi
+
+          # Merge the release notes per architecture
+          for stack in $stacks; do
+            stack_name=$(echo "$stack" | jq -r '.name')
+            filename="${arch_name}-${stack_name}-release-notes.md"
+            cat "${release_notes_dir}/${filename}" >>"${release_notes_dir}/${arch_name}-release-notes"
+          done
+
+          # add release notes of the arch on the assets
+          assets="$(jq -c \
+            --arg release_notes_dir "${release_notes_dir}" \
+            --arg tag "${{ steps.tag.outputs.tag }}" \
+            --arg repo "${{ needs.preparation.outputs.github_repo_name }}" \
+            --arg arch "${arch_name}" \
+            --arg arch_prefix "${arch_prefix}" \
+            '. += [
+              {
+                "path": ($release_notes_dir + "/" + $arch + "-" + "release-notes"),
+                "name": ($repo + "-" + $tag + $arch_prefix + "release-notes.md"),
+                "content_type": "text/plain"
+              }
+            ]' <<<"${assets}")"
+        done
+
+        echo "assets=${assets}" >> "$GITHUB_OUTPUT"
+
+    - name: Generate Release Notes Description
+      id: notes
+      run: |
+
+        release_notes_dir="release-notes"
+
+        # If there is only one architecture
+        archs_length=$(echo '${{ needs.preparation.outputs.architectures }}' | jq 'length')
+        if [ $archs_length -eq 1 ]; then
+          arch_name=$(echo '${{ needs.preparation.outputs.architectures }}' | jq -r '.[0].name')
+          cat "${release_notes_dir}/${arch_name}-release-notes" > release_notes.md
+        else
+          echo "## Images" > release_notes.md
+          echo "" >> release_notes.md
+          stacks=$(echo '${{ needs.preparation.outputs.stacks }}' | jq -c -r '.[]')
+          for stack in $stacks; do
+            stack_name=$(echo "$stack" | jq -r '.name')
+            run_image=$(echo "$stack" | jq -r '.run_image')
+            build_image=$(echo "$stack" | jq -r '.build_image')
+            create_build_image=$(echo "$stack" | jq -r '.create_build_image // false')
+
+            if [ ${create_build_image} == true ]; then
+              echo "Build: \`${{ needs.preparation.outputs.repo_owner }}/${build_image}-${{ needs.preparation.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}\`" >> release_notes.md
+            fi
+            echo "Run: \`${{ needs.preparation.outputs.repo_owner }}/${run_image}-${{ needs.preparation.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}\`" >> release_notes.md
+          done
+        fi
+
+        echo "release_body=release_notes.md" >> "$GITHUB_OUTPUT"
 
     - name: Create Release
       uses: paketo-buildpacks/github-config/actions/release/create@main
       with:
         repo: ${{ github.repository }}
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-        tag_name: v${{ needs.release.outputs.tag }}
+        tag_name: v${{ steps.tag.outputs.tag }}
         target_commitish: ${{ github.sha }}
-        name: v${{ needs.release.outputs.tag }}
-        body_filepath: release_notes
+        name: v${{ steps.tag.outputs.tag }}
+        body_filepath: ${{ steps.notes.outputs.release_body }}
         draft: false
-        assets: ${{ steps.merge_release_assets.outputs.assets }}
+        assets: ${{ steps.assets.outputs.assets }}
 
   failure:
     name: Alert on Failure
     runs-on: ubuntu-22.04
-    needs: [preparation, poll_images, create_stack, diff, test, release, create_release, packages_changed, stack_files_changed]
-    if: ${{ always() && needs.preparation.result == 'failure' || needs.poll_images.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' || needs.create_release.result == 'failure' || needs.packages_changed.result == 'failure' || needs.stack_files_changed.result == 'failure' }}
+    needs: [ preparation, poll_usns, poll_images, create_stack, diff, test, release, packages_changed, stack_files_changed ]
+    if: ${{ always() && needs.preparation.result == 'failure' || needs.poll_images.result == 'failure' || needs.poll_usns.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' || needs.packages_changed.result == 'failure' || needs.stack_files_changed.result == 'failure' }}
     steps:
     - name: File Failure Alert Issue
       uses: paketo-buildpacks/github-config/actions/issue/file@main

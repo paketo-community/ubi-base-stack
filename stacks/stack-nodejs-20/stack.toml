@@ -2,7 +2,7 @@ id = "io.buildpacks.stacks.ubi8"
 homepage = "https://github.com/paketo-community/ubi-base-stack"
 maintainer = "Paketo Community"
 
-platforms = ["linux/amd64"]
+platforms = ["linux/amd64", "linux/arm64", "linux/ppc64le", "linux/s390x"]
 
 [build]
   description = "base build ubi8 image to support buildpacks"
