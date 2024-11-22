@@ -49,7 +49,7 @@ jobs:
       run: |
         # Strip off the org and slash from repo name
         # paketo-buildpacks/repo-name --> repo-name
-        echo "repo_name=$(echo "${{ github.repository }}" | sed 's/^.*\///')" >> "$GITHUB_OUTPUT"
+        echo "repo_name=$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-stack$//')" >> "$GITHUB_OUTPUT"
 
     - name: Set matrix
       id: set-matrix
