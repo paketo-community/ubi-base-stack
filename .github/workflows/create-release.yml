@@ -599,6 +599,11 @@ jobs:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
         arch: ${{ fromJSON(needs.preparation.outputs.architectures) }}
     steps:
+    - name: Checkout With History
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # gets full history
+
     - name: Download Current Receipt(s)
       uses: actions/download-artifact@v4
       with:
