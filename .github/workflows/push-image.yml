@@ -26,7 +26,7 @@ jobs:
       push_to_gcr: ${{ steps.parse_configs.outputs.push_to_gcr }}
       push_to_dockerhub: ${{ steps.parse_configs.outputs.push_to_dockerhub }}
       tag: ${{ steps.event.outputs.tag }}
-      repo_name: ${{ steps.registry-repo.outputs.repo_name }}
+      registry_repo_name: ${{ steps.registry-repo.outputs.name }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -47,15 +47,17 @@ jobs:
     - name: Get Registry Repo Name
       id: registry-repo
       run: |
-        # Strip off the org and slash from repo name
-        # paketo-buildpacks/repo-name --> repo-name
-        echo "repo_name=$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-stack$//')" >> "$GITHUB_OUTPUT"
+        # Strip off 'stack' suffix from repo name
+        # some-name-stack --> some-name
+        echo "name=$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-stack$//')" >> "$GITHUB_OUTPUT"
 
     - name: Set matrix
       id: set-matrix
       run: |
+        # Strip off the org and slash from repo name
+        # paketo-buildpacks/repo-name --> repo-name
+        repo_name=$(echo "${{ github.repository }}" | sed 's/^.*\///')
         release_version="${{ steps.event.outputs.tag }}"
-        repo_name="${{ steps.registry-repo.outputs.repo_name }}"
         release_info=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${release_version}")
         asset_prefix="${repo_name}-${release_version}-"
         oci_images=$(echo $release_info | jq -c --arg asset_prefix "$asset_prefix" '[ .assets[] | select(.name | endswith(".oci")) | {name: (.name | split(".oci") | .[0] | split($asset_prefix) | .[1]), url}]')
@@ -143,19 +145,19 @@ jobs:
         chmod 777 ./.bin/
 
         ./scripts/publish.sh \
-          --image-ref "docker.io/${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:${{ needs.preparation.outputs.tag }}" \
-          --image-ref "docker.io/${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:latest" \
+          --image-ref "docker.io/${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.registry_repo_name }}:${{ needs.preparation.outputs.tag }}" \
+          --image-ref "docker.io/${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.registry_repo_name }}:latest" \
           --image-archive "./${{ matrix.oci_image.name }}.oci"
 
         if [ "${{ needs.preparation.outputs.push_to_gcr }}" = "true" ]; then
 
-          platforms=$(docker manifest inspect "docker.io/${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:${{ needs.preparation.outputs.tag }}" |
+          platforms=$(docker manifest inspect "docker.io/${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.registry_repo_name }}:${{ needs.preparation.outputs.tag }}" |
             jq -r '[.manifests[].platform] | [.[] | .os + "/" + .architecture] | join(",")')
 
-          echo "FROM docker.io/${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:${{ needs.preparation.outputs.tag }}" | \
+          echo "FROM docker.io/${DOCKERHUB_ORG}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.registry_repo_name }}:${{ needs.preparation.outputs.tag }}" | \
           docker buildx build -f - . \
-            --tag "${{ env.GCR_REGISTRY }}/${GCR_PROJECT}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:${{ needs.preparation.outputs.tag }}" \
-            --tag "${{ env.GCR_REGISTRY }}/${GCR_PROJECT}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.repo_name }}:latest" \
+            --tag "${{ env.GCR_REGISTRY }}/${GCR_PROJECT}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.registry_repo_name }}:${{ needs.preparation.outputs.tag }}" \
+            --tag "${{ env.GCR_REGISTRY }}/${GCR_PROJECT}/${{ matrix.oci_image.name }}-${{ needs.preparation.outputs.registry_repo_name }}:latest" \
               --platform "$platforms" \
             --provenance=false \
             --push
@@ -165,7 +167,7 @@ jobs:
         #    paketobuildpacks/{build/run}:{version}-{variant}-cnb
         #    paketobuildpacks/{build/run}:{variant}-cnb
         #    paketobuildpacks/{build/run}:{variant}
-        registry_repo="${{ steps.registry-repo.outputs.name }}"
+        registry_repo="${{ needs.preparation.outputs.registry_repo_name }}"
         if [[ ${registry_repo} == "bionic"-* ]];
           then
           # Strip the final part from a repo name after the `-`
