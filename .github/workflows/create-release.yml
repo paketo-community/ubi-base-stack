@@ -901,7 +901,7 @@ jobs:
         run_modified=$(jq '. | length' <<< "${RUN_MODIFIED}")
         echo "Run packages modified: ${run_modified}"
 
-        if [ "${build_added}" -eq 0 ] && [ "${build_modified}" -eq 0 ] && [ "${run_added}" -eq 0 ] && [ "${run_modified}" -eq 0 ]; then
+        if [ "${build_added:-0}" -eq 0 ] && [ "${build_modified:-0}" -eq 0 ] && [ "${run_added}" -eq 0 ] && [ "${run_modified}" -eq 0 ]; then
           echo "No packages changed."
           # We ommit setting "packages_changed" variable to false, 
           # as there is an edge case scenario overriding any true value due to parallelization
