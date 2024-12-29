@@ -589,6 +589,13 @@ jobs:
 
   diff:
     name: Diff Packages
+    env:
+      BUILD_DIFF_ADDED_FILENAME: "build-diff-added.json"
+      BUILD_DIFF_MODIFIED_FILENAME: "build-diff-modified.json"
+      BUILD_DIFF_REMOVED_FILENAME: "build-diff-removed.json"
+      RUN_DIFF_ADDED_FILENAME: "run-diff-added.json"
+      RUN_DIFF_MODIFIED_FILENAME: "run-diff-modified.json"
+      RUN_DIFF_REMOVED_FILENAME: "run-diff-removed.json"
     if: ${{ !cancelled() && !failure() && needs.create_stack.result != 'skipped' }}
     outputs:
       removed_with_force: ${{ steps.removed_with_force.outputs.packages_removed }}
@@ -695,6 +702,9 @@ jobs:
       with:
         previous: "/github/workspace/${{ matrix.arch.name }}-previous-build-receipt-${{ matrix.stacks.name }}"
         current: "/github/workspace/${{ matrix.arch.name }}-current-build-receipt-${{ matrix.stacks.name }}"
+        added_diff_file: "/github/workspace/${{ env.BUILD_DIFF_ADDED_FILENAME }}"
+        modified_diff_file: "/github/workspace/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
+        removed_diff_file: "/github/workspace/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
 
     - name: Compare Run Packages
       id: run_diff
@@ -702,16 +712,19 @@ jobs:
       with:
         previous: "/github/workspace/${{ matrix.arch.name }}-previous-run-receipt-${{ matrix.stacks.name }}"
         current: "/github/workspace/${{ matrix.arch.name }}-current-run-receipt-${{ matrix.stacks.name }}"
+        added_diff_file: "/github/workspace/${{ env.RUN_DIFF_ADDED_FILENAME }}"
+        modified_diff_file: "/github/workspace/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
+        removed_diff_file: "/github/workspace/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
 
     - name: Fail If Packages Removed
       id: removed_with_force
       run: |
          if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
-          build=$(jq '. | length' <<< "${BUILD_REMOVED}")
+          build=$(jq '. | length' "${BUILD_REMOVED}")
           echo "Build packages removed: ${build}"
          fi
 
-         run=$(jq '. | length' <<< "${RUN_REMOVED}")
+         run=$(jq '. | length' "${RUN_REMOVED}")
          echo "Run packages removed: ${run}"
 
          # only fail if packages are removed AND the release has not been forced
@@ -723,27 +736,27 @@ jobs:
              echo "packages_removed=true" >> "$GITHUB_OUTPUT"
            fi
          else
-           echo "packages_removed=false" >> "$GITHUB_OUTPUT"
+          echo "packages_removed=false" >> "$GITHUB_OUTPUT"
          fi
       env:
-        BUILD_REMOVED: ${{ steps.build_diff.outputs.removed }}
-        RUN_REMOVED: ${{ steps.run_diff.outputs.removed }}
+        BUILD_REMOVED: "${{ github.workspace }}/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
+        RUN_REMOVED: "${{ github.workspace }}/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
 
     - name: Create/Upload variable artifacts
       id: variable_artifacts
       run: |
-        mkdir -p diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
-        cd diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
+        diffs_dir="diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}"
+        mkdir -p "$diffs_dir"
 
         if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
-         echo '${{ steps.build_diff.outputs.added }}' > build_added
-         echo '${{ steps.build_diff.outputs.modified }}' > build_modified
-         echo '${{ steps.build_diff.outputs.removed }}' > build_removed_with_force
+          cp "${{ github.workspace }}/${{ env.BUILD_DIFF_ADDED_FILENAME }}" "$diffs_dir/build_added"
+          cp "${{ github.workspace }}/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}" "$diffs_dir/build_modified"
+          cp "${{ github.workspace }}/${{ env.BUILD_DIFF_REMOVED_FILENAME }}" "$diffs_dir/build_removed_with_force"
         fi
 
-        echo '${{ steps.run_diff.outputs.added }}' > run_added
-        echo '${{ steps.run_diff.outputs.modified }}' > run_modified
-        echo '${{ steps.run_diff.outputs.removed }}' > run_removed_with_force
+        cp "${{ github.workspace }}/${{ env.RUN_DIFF_ADDED_FILENAME }}" "$diffs_dir/run_added"
+        cp "${{ github.workspace }}/${{ env.RUN_DIFF_MODIFIED_FILENAME }}" "$diffs_dir/run_modified"
+        cp "${{ github.workspace }}/${{ env.RUN_DIFF_REMOVED_FILENAME }}" "$diffs_dir/run_removed_with_force"
 
     - name: Upload diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
       uses: actions/upload-artifact@v4
