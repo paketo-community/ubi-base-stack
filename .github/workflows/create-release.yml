@@ -449,7 +449,7 @@ jobs:
   stack_files_changed:
     name: Determine If Stack Files Changed
     runs-on: ubuntu-22.04
-    needs: [ preparation, poll_usns, poll_images  ]
+    needs: [ preparation, poll_usns, poll_images ]
     if: ${{ 
       !failure() && !cancelled() &&
       !(
@@ -479,16 +479,6 @@ jobs:
           echo "${changed}"
           echo "stack_files_changed=true" >> "$GITHUB_OUTPUT"
         fi
-
-  run_if_stack_files_changed:
-    name: Run If Stack Files Changed
-    runs-on: ubuntu-22.04
-    needs: [stack_files_changed]
-    if: ${{ !failure() && !cancelled() && needs.stack_files_changed.outputs.stack_files_changed == 'true' }}
-    steps:
-    - name: Run if stack files changed
-      run: |
-        echo "stack files have changed"
 
   usns_or_sha_changed:
     name: USNs or SHAs have changed
@@ -722,6 +712,8 @@ jobs:
          if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
           build=$(jq '. | length' "${BUILD_REMOVED}")
           echo "Build packages removed: ${build}"
+         else
+          build=0
          fi
 
          run=$(jq '. | length' "${RUN_REMOVED}")
@@ -735,8 +727,6 @@ jobs:
            else
              echo "packages_removed=true" >> "$GITHUB_OUTPUT"
            fi
-         else
-          echo "packages_removed=false" >> "$GITHUB_OUTPUT"
          fi
       env:
         BUILD_REMOVED: "${{ github.workspace }}/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
@@ -847,16 +837,6 @@ jobs:
         name: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
         path: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
 
-  run_if_packages_removed_with_force:
-    name: Run If Packages Removed With Force
-    needs: [ diff ]
-    runs-on: ubuntu-22.04
-    if: ${{ needs.diff.outputs.removed_with_force == 'true' }}
-    steps:
-    - name: Run if packages removed with force
-      run: |
-        echo "packages removed with user-provided force"
-
   packages_changed:
     name: Determine If Packages Changed
     needs: [ diff, preparation ]
@@ -923,16 +903,6 @@ jobs:
           echo "packages_changed=true" >> "$GITHUB_OUTPUT"
         fi
 
-  run_if_packages_changed:
-    name: Run If Packages Changed
-    runs-on: ubuntu-22.04
-    needs: [packages_changed]
-    if: ${{ needs.packages_changed.outputs.packages_changed == 'true' && !cancelled() }}
-    steps:
-    - name: Run if packages changed
-      run: |
-        echo "packages have changed"
-
   test:
     name: Acceptance Test
     needs: [ preparation, create_stack ]
@@ -973,20 +943,11 @@ jobs:
     - name: Run Acceptance Tests
       run: ./scripts/test.sh --validate-stack-builds
 
-  force_release_creation:
-    name: Force Release Creation
-    runs-on: ubuntu-22.04
-    if: ${{github.event.inputs.force == 'true'}}
-    steps:
-    - name: Signal force release creation
-      run: |
-        echo "Force release creation input set to true"
-
   release:
     name: Release
     runs-on: ubuntu-22.04
-    needs: [create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, run_if_packages_removed_with_force, test, force_release_creation, preparation ]
-    if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' && (needs.run_if_packages_changed.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
+    needs: [create_stack, diff, stack_files_changed, test, preparation, packages_changed]
+    if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' && ( needs.packages_changed.outputs.packages_changed == 'true' ||  needs.stack_files_changed.outputs.stack_files_changed == 'true' || github.event.inputs.force == 'true' ) }}
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
@@ -994,9 +955,9 @@ jobs:
       run: |
         printf "Diff Packages: %s\n" "${{ needs.diff.result }}"
         printf "Acceptance Tests: %s\n" "${{ needs.test.result }}"
-        printf "Run If Packages Changed: %s\n" "${{ needs.run_if_packages_changed.result }}"
-        printf "Run If Packages Removed With Force: %s\n" "${{ needs.run_if_packages_removed_with_force.result }}"
-        printf "Run If Stack Files Changed: %s\n" "${{ needs.run_if_stack_files_changed.result }}"
+        printf "Packages Changed: %s\n" "${{ needs.packages_changed.outputs.packages_changed }}"
+        printf "Packages Removed With Force: %s\n" "${{ needs.diff.outputs.removed_with_force == 'true' }}"
+        printf "Stack Files Changed: %s\n" "${{ needs.stack_files_changed.outputs.stack_files_changed }}"
         printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
 
     - name: Checkout With History
