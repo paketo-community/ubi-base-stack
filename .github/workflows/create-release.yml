@@ -817,12 +817,12 @@ jobs:
       with:
         build_image: ${{ steps.registry_names.outputs.build_image }}
         run_image: ${{ steps.registry_names.outputs.run_image }}
-        build_packages_added: ${{ steps.build_diff.outputs.added }}
-        build_packages_modified: ${{ steps.build_diff.outputs.modified }}
-        build_packages_removed_with_force: ${{ steps.build_diff.outputs.removed }}
-        run_packages_added: ${{ steps.run_diff.outputs.added }}
-        run_packages_modified: ${{ steps.run_diff.outputs.modified }}
-        run_packages_removed_with_force: ${{ steps.run_diff.outputs.removed }}
+        build_packages_added: "/github/workspace/${{ env.BUILD_DIFF_ADDED_FILENAME }}"
+        build_packages_modified: "/github/workspace/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
+        build_packages_removed_with_force: "/github/workspace/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
+        run_packages_added: "/github/workspace/${{ env.RUN_DIFF_ADDED_FILENAME }}"
+        run_packages_modified: "/github/workspace/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
+        run_packages_removed_with_force: "/github/workspace/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
         supports_usns: ${{ needs.preparation.outputs.support_usns }}
         patched_usns: ${{ needs.get-usns.outputs.usns }}
 
@@ -1330,8 +1330,8 @@ jobs:
   failure:
     name: Alert on Failure
     runs-on: ubuntu-22.04
-    needs: [ preparation, poll_usns, poll_images, create_stack, diff, test, release, packages_changed, stack_files_changed ]
-    if: ${{ always() && needs.preparation.result == 'failure' || needs.poll_images.result == 'failure' || needs.poll_usns.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' || needs.packages_changed.result == 'failure' || needs.stack_files_changed.result == 'failure' }}
+    needs: [ preparation, poll_usns, poll_images, create_stack, diff, test, release ]
+    if: ${{ always() && needs.preparation.result == 'failure' || needs.poll_images.result == 'failure' || needs.poll_usns.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' }}
     steps:
     - name: File Failure Alert Issue
       uses: paketo-buildpacks/github-config/actions/issue/file@main
