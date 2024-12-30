@@ -830,11 +830,7 @@ jobs:
         run_packages_removed_with_force: "/github/workspace/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
         supports_usns: ${{ needs.preparation.outputs.support_usns }}
         patched_usns: ${{ needs.get-usns.outputs.usns }}
-
-    - name: Release Notes File
-      id: release-notes-file
-      run: |
-        printf '%s\n' '${{ steps.notes_arc_stack.outputs.release_body }}' > "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
+        release_body_file: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
 
     - name: Upload ${{ matrix.arch.name }} release notes file for stack ${{ matrix.stacks.name }}
       uses: actions/upload-artifact@v4
