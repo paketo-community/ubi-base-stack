@@ -742,6 +742,11 @@ jobs:
           cp "${{ github.workspace }}/${{ env.BUILD_DIFF_ADDED_FILENAME }}" "$diffs_dir/build_added"
           cp "${{ github.workspace }}/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}" "$diffs_dir/build_modified"
           cp "${{ github.workspace }}/${{ env.BUILD_DIFF_REMOVED_FILENAME }}" "$diffs_dir/build_removed_with_force"
+        else
+          # We generate empty build diffs for the release notes action not to break
+          echo null > "${{ github.workspace }}/${{ env.BUILD_DIFF_ADDED_FILENAME }}"
+          echo null > "${{ github.workspace }}/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
+          echo null > "${{ github.workspace }}/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
         fi
 
         cp "${{ github.workspace }}/${{ env.RUN_DIFF_ADDED_FILENAME }}" "$diffs_dir/run_added"
