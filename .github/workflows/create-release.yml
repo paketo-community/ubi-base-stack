@@ -449,7 +449,7 @@ jobs:
   stack_files_changed:
     name: Determine If Stack Files Changed
     runs-on: ubuntu-22.04
-    needs: [ preparation, poll_usns, poll_images  ]
+    needs: [ preparation, poll_usns, poll_images ]
     if: ${{ 
       !failure() && !cancelled() &&
       !(
@@ -479,16 +479,6 @@ jobs:
           echo "${changed}"
           echo "stack_files_changed=true" >> "$GITHUB_OUTPUT"
         fi
-
-  run_if_stack_files_changed:
-    name: Run If Stack Files Changed
-    runs-on: ubuntu-22.04
-    needs: [stack_files_changed]
-    if: ${{ !failure() && !cancelled() && needs.stack_files_changed.outputs.stack_files_changed == 'true' }}
-    steps:
-    - name: Run if stack files changed
-      run: |
-        echo "stack files have changed"
 
   usns_or_sha_changed:
     name: USNs or SHAs have changed
@@ -589,6 +579,13 @@ jobs:
 
   diff:
     name: Diff Packages
+    env:
+      BUILD_DIFF_ADDED_FILENAME: "build-diff-added.json"
+      BUILD_DIFF_MODIFIED_FILENAME: "build-diff-modified.json"
+      BUILD_DIFF_REMOVED_FILENAME: "build-diff-removed.json"
+      RUN_DIFF_ADDED_FILENAME: "run-diff-added.json"
+      RUN_DIFF_MODIFIED_FILENAME: "run-diff-modified.json"
+      RUN_DIFF_REMOVED_FILENAME: "run-diff-removed.json"
     if: ${{ !cancelled() && !failure() && needs.create_stack.result != 'skipped' }}
     outputs:
       removed_with_force: ${{ steps.removed_with_force.outputs.packages_removed }}
@@ -695,6 +692,9 @@ jobs:
       with:
         previous: "/github/workspace/${{ matrix.arch.name }}-previous-build-receipt-${{ matrix.stacks.name }}"
         current: "/github/workspace/${{ matrix.arch.name }}-current-build-receipt-${{ matrix.stacks.name }}"
+        added_diff_file: "/github/workspace/${{ env.BUILD_DIFF_ADDED_FILENAME }}"
+        modified_diff_file: "/github/workspace/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
+        removed_diff_file: "/github/workspace/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
 
     - name: Compare Run Packages
       id: run_diff
@@ -702,16 +702,21 @@ jobs:
       with:
         previous: "/github/workspace/${{ matrix.arch.name }}-previous-run-receipt-${{ matrix.stacks.name }}"
         current: "/github/workspace/${{ matrix.arch.name }}-current-run-receipt-${{ matrix.stacks.name }}"
+        added_diff_file: "/github/workspace/${{ env.RUN_DIFF_ADDED_FILENAME }}"
+        modified_diff_file: "/github/workspace/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
+        removed_diff_file: "/github/workspace/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
 
     - name: Fail If Packages Removed
       id: removed_with_force
       run: |
          if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
-          build=$(jq '. | length' <<< "${BUILD_REMOVED}")
+          build=$(jq '. | length' "${BUILD_REMOVED}")
           echo "Build packages removed: ${build}"
+         else
+          build=0
          fi
 
-         run=$(jq '. | length' <<< "${RUN_REMOVED}")
+         run=$(jq '. | length' "${RUN_REMOVED}")
          echo "Run packages removed: ${run}"
 
          # only fail if packages are removed AND the release has not been forced
@@ -722,28 +727,31 @@ jobs:
            else
              echo "packages_removed=true" >> "$GITHUB_OUTPUT"
            fi
-         else
-           echo "packages_removed=false" >> "$GITHUB_OUTPUT"
          fi
       env:
-        BUILD_REMOVED: ${{ steps.build_diff.outputs.removed }}
-        RUN_REMOVED: ${{ steps.run_diff.outputs.removed }}
+        BUILD_REMOVED: "${{ github.workspace }}/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
+        RUN_REMOVED: "${{ github.workspace }}/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
 
     - name: Create/Upload variable artifacts
       id: variable_artifacts
       run: |
-        mkdir -p diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
-        cd diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
+        diffs_dir="diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}"
+        mkdir -p "$diffs_dir"
 
         if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
-         echo '${{ steps.build_diff.outputs.added }}' > build_added
-         echo '${{ steps.build_diff.outputs.modified }}' > build_modified
-         echo '${{ steps.build_diff.outputs.removed }}' > build_removed_with_force
+          cp "${{ github.workspace }}/${{ env.BUILD_DIFF_ADDED_FILENAME }}" "$diffs_dir/build_added"
+          cp "${{ github.workspace }}/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}" "$diffs_dir/build_modified"
+          cp "${{ github.workspace }}/${{ env.BUILD_DIFF_REMOVED_FILENAME }}" "$diffs_dir/build_removed_with_force"
+        else
+          # We generate empty build diffs for the release notes action not to break
+          echo null > "${{ github.workspace }}/${{ env.BUILD_DIFF_ADDED_FILENAME }}"
+          echo null > "${{ github.workspace }}/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
+          echo null > "${{ github.workspace }}/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
         fi
 
-        echo '${{ steps.run_diff.outputs.added }}' > run_added
-        echo '${{ steps.run_diff.outputs.modified }}' > run_modified
-        echo '${{ steps.run_diff.outputs.removed }}' > run_removed_with_force
+        cp "${{ github.workspace }}/${{ env.RUN_DIFF_ADDED_FILENAME }}" "$diffs_dir/run_added"
+        cp "${{ github.workspace }}/${{ env.RUN_DIFF_MODIFIED_FILENAME }}" "$diffs_dir/run_modified"
+        cp "${{ github.workspace }}/${{ env.RUN_DIFF_REMOVED_FILENAME }}" "$diffs_dir/run_removed_with_force"
 
     - name: Upload diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
       uses: actions/upload-artifact@v4
@@ -814,35 +822,21 @@ jobs:
       with:
         build_image: ${{ steps.registry_names.outputs.build_image }}
         run_image: ${{ steps.registry_names.outputs.run_image }}
-        build_packages_added: ${{ steps.build_diff.outputs.added }}
-        build_packages_modified: ${{ steps.build_diff.outputs.modified }}
-        build_packages_removed_with_force: ${{ steps.build_diff.outputs.removed }}
-        run_packages_added: ${{ steps.run_diff.outputs.added }}
-        run_packages_modified: ${{ steps.run_diff.outputs.modified }}
-        run_packages_removed_with_force: ${{ steps.run_diff.outputs.removed }}
+        build_packages_added: "/github/workspace/${{ env.BUILD_DIFF_ADDED_FILENAME }}"
+        build_packages_modified: "/github/workspace/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
+        build_packages_removed_with_force: "/github/workspace/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
+        run_packages_added: "/github/workspace/${{ env.RUN_DIFF_ADDED_FILENAME }}"
+        run_packages_modified: "/github/workspace/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
+        run_packages_removed_with_force: "/github/workspace/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
         supports_usns: ${{ needs.preparation.outputs.support_usns }}
         patched_usns: ${{ needs.get-usns.outputs.usns }}
-
-    - name: Release Notes File
-      id: release-notes-file
-      run: |
-        printf '%s\n' '${{ steps.notes_arc_stack.outputs.release_body }}' > "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
+        release_body_file: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
 
     - name: Upload ${{ matrix.arch.name }} release notes file for stack ${{ matrix.stacks.name }}
       uses: actions/upload-artifact@v4
       with:
         name: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
         path: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
-
-  run_if_packages_removed_with_force:
-    name: Run If Packages Removed With Force
-    needs: [ diff ]
-    runs-on: ubuntu-22.04
-    if: ${{ needs.diff.outputs.removed_with_force == 'true' }}
-    steps:
-    - name: Run if packages removed with force
-      run: |
-        echo "packages removed with user-provided force"
 
   packages_changed:
     name: Determine If Packages Changed
@@ -910,16 +904,6 @@ jobs:
           echo "packages_changed=true" >> "$GITHUB_OUTPUT"
         fi
 
-  run_if_packages_changed:
-    name: Run If Packages Changed
-    runs-on: ubuntu-22.04
-    needs: [packages_changed]
-    if: ${{ needs.packages_changed.outputs.packages_changed == 'true' && !cancelled() }}
-    steps:
-    - name: Run if packages changed
-      run: |
-        echo "packages have changed"
-
   test:
     name: Acceptance Test
     needs: [ preparation, create_stack ]
@@ -960,20 +944,11 @@ jobs:
     - name: Run Acceptance Tests
       run: ./scripts/test.sh --validate-stack-builds
 
-  force_release_creation:
-    name: Force Release Creation
-    runs-on: ubuntu-22.04
-    if: ${{github.event.inputs.force == 'true'}}
-    steps:
-    - name: Signal force release creation
-      run: |
-        echo "Force release creation input set to true"
-
   release:
     name: Release
     runs-on: ubuntu-22.04
-    needs: [create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, run_if_packages_removed_with_force, test, force_release_creation, preparation ]
-    if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' && (needs.run_if_packages_changed.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
+    needs: [create_stack, diff, stack_files_changed, test, preparation, packages_changed]
+    if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' && ( needs.packages_changed.outputs.packages_changed == 'true' ||  needs.stack_files_changed.outputs.stack_files_changed == 'true' || github.event.inputs.force == 'true' ) }}
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
@@ -981,9 +956,9 @@ jobs:
       run: |
         printf "Diff Packages: %s\n" "${{ needs.diff.result }}"
         printf "Acceptance Tests: %s\n" "${{ needs.test.result }}"
-        printf "Run If Packages Changed: %s\n" "${{ needs.run_if_packages_changed.result }}"
-        printf "Run If Packages Removed With Force: %s\n" "${{ needs.run_if_packages_removed_with_force.result }}"
-        printf "Run If Stack Files Changed: %s\n" "${{ needs.run_if_stack_files_changed.result }}"
+        printf "Packages Changed: %s\n" "${{ needs.packages_changed.outputs.packages_changed }}"
+        printf "Packages Removed With Force: %s\n" "${{ needs.diff.outputs.removed_with_force == 'true' }}"
+        printf "Stack Files Changed: %s\n" "${{ needs.stack_files_changed.outputs.stack_files_changed }}"
         printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
 
     - name: Checkout With History
@@ -1356,8 +1331,8 @@ jobs:
   failure:
     name: Alert on Failure
     runs-on: ubuntu-22.04
-    needs: [ preparation, poll_usns, poll_images, create_stack, diff, test, release, packages_changed, stack_files_changed ]
-    if: ${{ always() && needs.preparation.result == 'failure' || needs.poll_images.result == 'failure' || needs.poll_usns.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' || needs.packages_changed.result == 'failure' || needs.stack_files_changed.result == 'failure' }}
+    needs: [ preparation, poll_usns, poll_images, create_stack, diff, test, release ]
+    if: ${{ always() && needs.preparation.result == 'failure' || needs.poll_images.result == 'failure' || needs.poll_usns.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' }}
     steps:
     - name: File Failure Alert Issue
       uses: paketo-buildpacks/github-config/actions/issue/file@main
